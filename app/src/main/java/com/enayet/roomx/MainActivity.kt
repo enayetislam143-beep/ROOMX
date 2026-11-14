@@ -1,6 +1,7 @@
 package com.enayet.roomx
 
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -23,7 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -185,6 +188,18 @@ fun AuthScreen(onDone: () -> Unit) {
 
 data class NavTab(val label: String, val icon: ImageVector)
 
+fun shareRoom(ctx: Context, name: String, code: String) {
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, "Join my ROOMX room \"$name\" with code $code")
+    }
+    try {
+        ctx.startActivity(Intent.createChooser(send, "Share room"))
+    } catch (e: ActivityNotFoundException) {
+        Toast.makeText(ctx, "No app found to share", Toast.LENGTH_SHORT).show()
+    }
+}
+
 @Composable
 fun RoomXApp(onLogout: () -> Unit) {
     val tabs = listOf(
@@ -195,6 +210,9 @@ fun RoomXApp(onLogout: () -> Unit) {
         NavTab("Profile", Icons.Default.AccountCircle)
     )
     var selected by remember { mutableIntStateOf(0) }
+    var dialog by remember { mutableStateOf<String?>(null) }
+    var refreshKey by remember { mutableIntStateOf(0) }
+    var createdRoom by remember { mutableStateOf<RoomInfo?>(null) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -220,18 +238,316 @@ fun RoomXApp(onLogout: () -> Unit) {
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
             when (selected) {
-                0 -> HomeScreen()
-                1 -> ComingSoon("Rooms", "Create and join rooms with a code. Coming in Stage 4.")
+                0 -> HomeScreen(
+                    onCreateRoom = { dialog = "create" },
+                    onJoinRoom = { dialog = "join" }
+                )
+                1 -> RoomsScreen(
+                    refreshKey = refreshKey,
+                    onCreate = { dialog = "create" },
+                    onJoin = { dialog = "join" }
+                )
                 2 -> ComingSoon("Tournaments", "Brackets, schedules and results. Coming in Stage 6.")
                 3 -> ComingSoon("Notifications", "Invites, matches and announcements. Coming in Stage 8.")
                 else -> ProfileScreen(onLogout)
             }
         }
     }
+
+    if (dialog == "create") {
+        CreateRoomDialog(
+            onDismiss = { dialog = null },
+            onCreated = { room ->
+                dialog = null
+                createdRoom = room
+                refreshKey++
+                selected = 1
+            }
+        )
+    } else if (dialog == "join") {
+        JoinRoomDialog(
+            onDismiss = { dialog = null },
+            onJoined = {
+                dialog = null
+                refreshKey++
+                selected = 1
+            }
+        )
+    }
+
+    createdRoom?.let { room ->
+        RoomCreatedDialog(room = room, onDone = { createdRoom = null })
+    }
 }
 
 @Composable
-fun HomeScreen() {
+fun CreateRoomDialog(onDismiss: () -> Unit, onCreated: (RoomInfo) -> Unit) {
+    var name by remember { mutableStateOf("") }
+    var desc by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    AlertDialog(
+        onDismissRequest = { if (!loading) onDismiss() },
+        title = { Text("Create Room") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Room name (3-40 characters)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = desc,
+                    onValueChange = { desc = it },
+                    label = { Text("Description (optional)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (error != null) {
+                    Text(error ?: "", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = !loading,
+                onClick = {
+                    val cleanName = name.trim()
+                    if (cleanName.length < 3 || cleanName.length > 40) {
+                        error = "Room name must be 3 to 40 characters."
+                    } else {
+                        scope.launch {
+                            loading = true
+                            error = null
+                            try {
+                                val room = SupabaseApi.createRoom(cleanName, desc.trim())
+                                onCreated(room)
+                            } catch (e: Exception) {
+                                error = e.message ?: "Could not create the room."
+                                loading = false
+                            }
+                        }
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Blue)
+            ) {
+                Text(if (loading) "Creating..." else "Create")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !loading) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+fun JoinRoomDialog(onDismiss: () -> Unit, onJoined: (RoomInfo) -> Unit) {
+    var code by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    AlertDialog(
+        onDismissRequest = { if (!loading) onDismiss() },
+        title = { Text("Join Room") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = { code = it.uppercase() },
+                    label = { Text("Room code, e.g. RX-482761") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (error != null) {
+                    Text(error ?: "", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = !loading,
+                onClick = {
+                    val cleanCode = code.trim()
+                    if (cleanCode.isBlank()) {
+                        error = "Enter a room code."
+                    } else {
+                        scope.launch {
+                            loading = true
+                            error = null
+                            try {
+                                val room = SupabaseApi.joinRoom(cleanCode)
+                                onJoined(room)
+                            } catch (e: Exception) {
+                                error = e.message ?: "Could not join the room."
+                                loading = false
+                            }
+                        }
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Blue)
+            ) {
+                Text(if (loading) "Joining..." else "Join")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !loading) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+fun RoomCreatedDialog(room: RoomInfo, onDone: () -> Unit) {
+    val ctx = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+
+    AlertDialog(
+        onDismissRequest = onDone,
+        title = { Text("Room created") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(room.name, fontWeight = FontWeight.Bold)
+                Text("ROOM CODE", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(room.code, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, color = Blue)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = {
+                        clipboard.setText(AnnotatedString(room.code))
+                        Toast.makeText(ctx, "Code copied", Toast.LENGTH_SHORT).show()
+                    }) { Text("Copy Code") }
+                    OutlinedButton(onClick = { shareRoom(ctx, room.name, room.code) }) {
+                        Text("Share")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDone, colors = ButtonDefaults.buttonColors(containerColor = Blue)) {
+                Text("Done")
+            }
+        }
+    )
+}
+
+@Composable
+fun RoomsScreen(refreshKey: Int, onCreate: () -> Unit, onJoin: () -> Unit) {
+    val ctx = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
+    var rooms by remember { mutableStateOf<List<RoomInfo>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var reload by remember { mutableIntStateOf(0) }
+    var leaving by remember { mutableStateOf<RoomInfo?>(null) }
+
+    LaunchedEffect(refreshKey, reload) {
+        loading = true
+        error = null
+        try {
+            rooms = SupabaseApi.myRooms()
+        } catch (e: Exception) {
+            error = e.message ?: "Could not load rooms."
+        }
+        loading = false
+    }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("My Rooms", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(
+                onClick = onCreate,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = Blue)
+            ) { Text("Create Room") }
+            OutlinedButton(onClick = onJoin, modifier = Modifier.weight(1f)) {
+                Text("Join Room")
+            }
+        }
+
+        if (loading) {
+            CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
+        }
+        if (error != null) {
+            Text(error ?: "", color = MaterialTheme.colorScheme.error)
+            TextButton(onClick = { reload++ }) { Text("Try again") }
+        }
+        if (!loading && error == null && rooms.isEmpty()) {
+            Text(
+                "You are not in any room yet. Create one, or join a friend's room with a code.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        rooms.forEach { room ->
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    Modifier.padding(16.dp).fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(room.name, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    if (room.description.isNotBlank()) {
+                        Text(room.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Text("Code: ${room.code}", fontWeight = FontWeight.SemiBold, color = Blue)
+                    Text(
+                        "${room.members}/${room.capacity} members  •  " +
+                            (if (room.role == "owner") "Owner" else "Member"),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = {
+                            clipboard.setText(AnnotatedString(room.code))
+                            Toast.makeText(ctx, "Code copied", Toast.LENGTH_SHORT).show()
+                        }) { Text("Copy code") }
+                        TextButton(onClick = { shareRoom(ctx, room.name, room.code) }) {
+                            Text("Share")
+                        }
+                        if (room.role != "owner") {
+                            TextButton(onClick = { leaving = room }) { Text("Leave") }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    leaving?.let { room ->
+        AlertDialog(
+            onDismissRequest = { leaving = null },
+            title = { Text("Leave room?") },
+            text = { Text("You will leave \"${room.name}\". You can join again with the code.") },
+            confirmButton = {
+                Button(onClick = {
+                    scope.launch {
+                        try {
+                            SupabaseApi.leaveRoom(room.id)
+                            leaving = null
+                            reload++
+                        } catch (e: Exception) {
+                            error = e.message ?: "Could not leave the room."
+                            leaving = null
+                        }
+                    }
+                }) { Text("Leave") }
+            },
+            dismissButton = {
+                TextButton(onClick = { leaving = null }) { Text("Cancel") }
+            }
+        )
+    }
+}
+
+@Composable
+fun HomeScreen(onCreateRoom: () -> Unit, onJoinRoom: () -> Unit) {
     val ctx = LocalContext.current
     val soon = { Toast.makeText(ctx, "Coming in an upcoming stage", Toast.LENGTH_SHORT).show() }
     val name = SupabaseApi.username?.takeIf { it.isNotBlank() } ?: "player"
@@ -253,8 +569,8 @@ fun HomeScreen() {
         }
         Text("Welcome, $name", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ActionCard("Create Room", Icons.Default.Add, Modifier.weight(1f), soon)
-            ActionCard("Join Room", Icons.Default.Search, Modifier.weight(1f), soon)
+            ActionCard("Create Room", Icons.Default.Add, Modifier.weight(1f), onCreateRoom)
+            ActionCard("Join Room", Icons.Default.Search, Modifier.weight(1f), onJoinRoom)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ActionCard("Create Tournament", Icons.Default.Star, Modifier.weight(1f), soon)
@@ -313,8 +629,11 @@ fun ProfileScreen(onLogout: () -> Unit) {
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
             Column(Modifier.padding(18.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(SupabaseApi.username?.takeIf { it.isNotBlank() } ?: "player",
-                    fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    SupabaseApi.username?.takeIf { it.isNotBlank() } ?: "player",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
                 Text(SupabaseApi.email ?: "", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }

@@ -2,9 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
+        android:name=".RoomXApplication"
         android:allowBackup="true"
         android:label="ROOMX"
         android:theme="@android:style/Theme.Material.NoActionBar">
+        <activity
+            android:name=".CrashActivity"
+            android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true">

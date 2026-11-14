@@ -1,10 +1,10 @@
-name: Crash Test
+name: Inspect
 on:
   workflow_dispatch:
   push:
 
 jobs:
-  test:
+  inspect:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,28 +15,25 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.9
-      - run: gradle assembleDebug
-      - name: Enable KVM
+      - name: Build
+        run: gradle assembleDebug --console=plain 2>&1 | tee build-log.txt
+      - name: Inspect
+        if: always()
         run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          arch: x86_64
-          target: google_apis
-          script: |
-            adb install app/build/outputs/apk/debug/app-debug.apk
-            adb logcat -c
-            adb shell am start -n com.enayet.roomx/.MainActivity
-            sleep 20
-            adb logcat -d | grep -A 25 "FATAL EXCEPTION" > crash-log.txt || true
-            echo "-----TAIL-----" >> crash-log.txt
-            adb logcat -d -t 150 >> crash-log.txt
-            cat crash-log.txt
+          {
+            echo "=== SOURCE FILES ==="
+            find . -path ./.git -prune -o -path ./app/build -prune -o -type f -print || true
+            echo "=== APK CONTENT ==="
+            unzip -l app/build/outputs/apk/debug/app-debug.apk || true
+            echo "=== COMPILED ROOMX CLASSES ==="
+            find app/build -name "*.class" | grep -i roomx || true
+            echo "=== KOTLIN TASKS ==="
+            grep -i "kotlin" build-log.txt || true
+            echo "=== app/build.gradle.kts ==="
+            cat app/build.gradle.kts || true
+          } > inspect.txt 2>&1
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: crash-log
-          path: crash-log.txt
+          name: inspect
+          path: inspect.txt

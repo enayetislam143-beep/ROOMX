@@ -16,7 +16,8 @@ data class RoomInfo(
     val description: String,
     val role: String,
     val members: Int,
-    val capacity: Int
+    val capacity: Int,
+    val status: String = "open"
 )
 
 data class ChatMessage(
@@ -25,6 +26,12 @@ data class ChatMessage(
     val username: String,
     val content: String,
     val createdAt: String
+)
+
+data class MemberInfo(
+    val userId: String,
+    val username: String,
+    val role: String
 )
 
 object SupabaseApi {
@@ -252,7 +259,8 @@ object SupabaseApi {
                         description = o.optString("description", ""),
                         role = o.optString("role", "member"),
                         members = o.optInt("members", 0),
-                        capacity = o.optInt("capacity", 50)
+                        capacity = o.optInt("capacity", 50),
+                        status = o.optString("status", "open")
                     )
                 )
             }
@@ -297,24 +305,58 @@ object SupabaseApi {
             request("/rest/v1/rpc/delete_message", body, true)
             Unit
         }
-    suspend fun deleteRoom(roomId: String) =
+
+    suspend fun getMembers(roomId: String): List<MemberInfo> =
         withContext(Dispatchers.IO) {
             val body = JSONObject().put("p_room_id", roomId)
-            request("/rest/v1/rpc/delete_room", body, true)
-            Unit
+            val text = request("/rest/v1/rpc/get_room_members", body, true)
+            val arr = JSONArray(if (text.isBlank()) "[]" else text)
+            val list = mutableListOf<MemberInfo>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                list.add(
+                    MemberInfo(
+                        userId = o.getString("user_id"),
+                        username = o.optString("username", "user"),
+                        role = o.optString("role", "member")
+                    )
+                )
+            }
+            list
         }
-    suspend fun deleteRoom(roomId: String) =
+
+    suspend fun removeMember(roomId: String, memberId: String) =
         withContext(Dispatchers.IO) {
-            val body = JSONObject().put("p_room_id", roomId)
-            request("/rest/v1/rpc/delete_room", body, true)
+            val body = JSONObject()
+                .put("p_room_id", roomId)
+                .put("p_user_id", memberId)
+            request("/rest/v1/rpc/remove_member", body, true)
             Unit
         }
-            suspend fun deleteRoom(roomId: String) =
+
+    suspend fun setModerator(roomId: String, memberId: String, make: Boolean) =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("p_room_id", roomId)
+                .put("p_user_id", memberId)
+                .put("p_make", make)
+            request("/rest/v1/rpc/set_moderator", body, true)
+            Unit
+        }
+
+    suspend fun closeRoom(roomId: String, closed: Boolean) =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("p_room_id", roomId)
+                .put("p_closed", closed)
+            request("/rest/v1/rpc/close_room", body, true)
+            Unit
+        }
+
+    suspend fun deleteRoom(roomId: String) =
         withContext(Dispatchers.IO) {
             val body = JSONObject().put("p_room_id", roomId)
             request("/rest/v1/rpc/delete_room", body, true)
             Unit
         }
 }
-        
-

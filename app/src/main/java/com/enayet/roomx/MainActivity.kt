@@ -12,6 +12,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -24,8 +25,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 
 private val Blue = Color(0xFF2F80FF)
 private val Purple = Color(0xFF8B5CF6)
@@ -46,7 +50,135 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme(colorScheme = RoomXColors) { RoomXApp() }
+            MaterialTheme(colorScheme = RoomXColors) { RoomXRoot() }
+        }
+    }
+}
+
+@Composable
+fun RoomXRoot() {
+    var loggedIn by remember { mutableStateOf(SupabaseApi.isLoggedIn) }
+    if (loggedIn) {
+        RoomXApp(onLogout = {
+            SupabaseApi.signOut()
+            loggedIn = false
+        })
+    } else {
+        AuthScreen(onDone = { loggedIn = true })
+    }
+}
+
+@Composable
+fun AuthScreen(onDone: () -> Unit) {
+    var isSignUp by remember { mutableStateOf(false) }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Spacer(Modifier.height(48.dp))
+            Text("ROOMX", fontSize = 40.sp, fontWeight = FontWeight.ExtraBold, color = Blue)
+            Text("Connect. Communicate. Compete.", color = Purple)
+            Spacer(Modifier.height(16.dp))
+            Text(
+                if (isSignUp) "Create your account" else "Log in",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            if (isSignUp) {
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it },
+                    label = { Text("Username (3-20 characters)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                label = { Text("Email") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Password (6+ characters)") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            if (error != null) {
+                Text(error ?: "", color = MaterialTheme.colorScheme.error)
+            }
+
+            Button(
+                onClick = {
+                    val cleanEmail = email.trim()
+                    val cleanName = username.trim()
+                    if (cleanEmail.isBlank() || !cleanEmail.contains("@")) {
+                        error = "Enter a valid email."
+                    } else if (password.length < 6) {
+                        error = "Password must be at least 6 characters."
+                    } else if (isSignUp && (cleanName.length < 3 || cleanName.length > 20)) {
+                        error = "Username must be 3 to 20 characters."
+                    } else {
+                        scope.launch {
+                            loading = true
+                            error = null
+                            try {
+                                if (isSignUp) {
+                                    SupabaseApi.signUp(cleanEmail, password, cleanName)
+                                } else {
+                                    SupabaseApi.signIn(cleanEmail, password)
+                                }
+                                onDone()
+                            } catch (e: Exception) {
+                                error = e.message ?: "Something went wrong."
+                            }
+                            loading = false
+                        }
+                    }
+                },
+                enabled = !loading,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Blue)
+            ) {
+                if (loading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Text(if (isSignUp) "Sign up" else "Log in")
+                }
+            }
+
+            TextButton(
+                onClick = {
+                    isSignUp = !isSignUp
+                    error = null
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    if (isSignUp) "Already have an account? Log in"
+                    else "New here? Create an account"
+                )
+            }
         }
     }
 }
@@ -54,7 +186,7 @@ class MainActivity : ComponentActivity() {
 data class NavTab(val label: String, val icon: ImageVector)
 
 @Composable
-fun RoomXApp() {
+fun RoomXApp(onLogout: () -> Unit) {
     val tabs = listOf(
         NavTab("Home", Icons.Default.Home),
         NavTab("Rooms", Icons.Default.Email),
@@ -92,7 +224,7 @@ fun RoomXApp() {
                 1 -> ComingSoon("Rooms", "Create and join rooms with a code. Coming in Stage 4.")
                 2 -> ComingSoon("Tournaments", "Brackets, schedules and results. Coming in Stage 6.")
                 3 -> ComingSoon("Notifications", "Invites, matches and announcements. Coming in Stage 8.")
-                else -> ProfileScreen()
+                else -> ProfileScreen(onLogout)
             }
         }
     }
@@ -102,6 +234,7 @@ fun RoomXApp() {
 fun HomeScreen() {
     val ctx = LocalContext.current
     val soon = { Toast.makeText(ctx, "Coming in an upcoming stage", Toast.LENGTH_SHORT).show() }
+    val name = SupabaseApi.username?.takeIf { it.isNotBlank() } ?: "player"
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -118,6 +251,7 @@ fun HomeScreen() {
                 Text("Connect. Communicate. Compete.", fontSize = 15.sp)
             }
         }
+        Text("Welcome, $name", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ActionCard("Create Room", Icons.Default.Add, Modifier.weight(1f), soon)
             ActionCard("Join Room", Icons.Default.Search, Modifier.weight(1f), soon)
@@ -159,7 +293,7 @@ fun ComingSoon(title: String, note: String) {
 }
 
 @Composable
-fun ProfileScreen() {
+fun ProfileScreen(onLogout: () -> Unit) {
     val ctx = LocalContext.current
     fun open(intent: Intent) {
         try {
@@ -173,7 +307,23 @@ fun ProfileScreen() {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("About ROOMX", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        Text("Profile", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(Modifier.padding(18.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(SupabaseApi.username?.takeIf { it.isNotBlank() } ?: "player",
+                    fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(SupabaseApi.email ?: "", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        OutlinedButton(onClick = onLogout, modifier = Modifier.fillMaxWidth()) {
+            Text("Log out")
+        }
+
+        Spacer(Modifier.height(8.dp))
+        Text("About ROOMX", fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Card(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)

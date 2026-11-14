@@ -297,4 +297,3 @@ object SupabaseApi {
             request("/rest/v1/rpc/delete_message", body, true)
             Unit
         }
-}

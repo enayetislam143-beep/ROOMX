@@ -9,6 +9,7 @@ import kotlin.system.exitProcess
 class RoomXApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        SupabaseApi.init(this)
         Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
             try {
                 val trace = Log.getStackTraceString(throwable)

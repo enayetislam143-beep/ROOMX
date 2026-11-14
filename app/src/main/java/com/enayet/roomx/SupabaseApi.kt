@@ -19,6 +19,14 @@ data class RoomInfo(
     val capacity: Int
 )
 
+data class ChatMessage(
+    val id: String,
+    val senderId: String,
+    val username: String,
+    val content: String,
+    val createdAt: String
+)
+
 object SupabaseApi {
     private const val BASE_URL = "https://auvathuvfzfeqnwwkoyb.supabase.co"
     private const val API_KEY = "sb_publishable_MrS0c9eYluNL9DHB_5AALg_x0_ayu7T"
@@ -249,5 +257,44 @@ object SupabaseApi {
                 )
             }
             list
+        }
+
+    suspend fun sendMessage(roomId: String, content: String) =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("p_room_id", roomId)
+                .put("p_content", content)
+            request("/rest/v1/rpc/send_message", body, true)
+            Unit
+        }
+
+    suspend fun getMessages(roomId: String, limit: Int = 50): List<ChatMessage> =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("p_room_id", roomId)
+                .put("p_limit", limit)
+            val text = request("/rest/v1/rpc/get_messages", body, true)
+            val arr = JSONArray(if (text.isBlank()) "[]" else text)
+            val list = mutableListOf<ChatMessage>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                list.add(
+                    ChatMessage(
+                        id = o.getString("id"),
+                        senderId = o.optString("sender_id", ""),
+                        username = o.optString("username", "user"),
+                        content = o.optString("content", ""),
+                        createdAt = o.optString("created_at", "")
+                    )
+                )
+            }
+            list
+        }
+
+    suspend fun deleteMessage(messageId: String) =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("p_message_id", messageId)
+            request("/rest/v1/rpc/delete_message", body, true)
+            Unit
         }
 }

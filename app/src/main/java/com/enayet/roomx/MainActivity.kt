@@ -213,70 +213,83 @@ fun RoomXApp(onLogout: () -> Unit) {
     var dialog by remember { mutableStateOf<String?>(null) }
     var refreshKey by remember { mutableIntStateOf(0) }
     var createdRoom by remember { mutableStateOf<RoomInfo?>(null) }
+    var openRoom by remember { mutableStateOf<RoomInfo?>(null) }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                tabs.forEachIndexed { i, tab ->
-                    NavigationBarItem(
-                        selected = selected == i,
-                        onClick = { selected = i },
-                        icon = { Icon(tab.icon, contentDescription = tab.label) },
-                        label = { Text(tab.label, fontSize = 11.sp) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = Color.White,
-                            selectedTextColor = Blue,
-                            indicatorColor = Blue,
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val currentRoom = openRoom
+    if (currentRoom != null) {
+        ChatScreen(
+            room = currentRoom,
+            onBack = {
+                openRoom = null
+                refreshKey++
+            }
+        )
+    } else {
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            bottomBar = {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                    tabs.forEachIndexed { i, tab ->
+                        NavigationBarItem(
+                            selected = selected == i,
+                            onClick = { selected = i },
+                            icon = { Icon(tab.icon, contentDescription = tab.label) },
+                            label = { Text(tab.label, fontSize = 11.sp) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = Color.White,
+                                selectedTextColor = Blue,
+                                indicatorColor = Blue,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         )
+                    }
+                }
+            }
+        ) { padding ->
+            Box(Modifier.padding(padding).fillMaxSize()) {
+                when (selected) {
+                    0 -> HomeScreen(
+                        onCreateRoom = { dialog = "create" },
+                        onJoinRoom = { dialog = "join" }
                     )
+                    1 -> RoomsScreen(
+                        refreshKey = refreshKey,
+                        onCreate = { dialog = "create" },
+                        onJoin = { dialog = "join" },
+                        onOpen = { room -> openRoom = room }
+                    )
+                    2 -> ComingSoon("Tournaments", "Brackets, schedules and results. Coming in Stage 6.")
+                    3 -> ComingSoon("Notifications", "Invites, matches and announcements. Coming in Stage 8.")
+                    else -> ProfileScreen(onLogout)
                 }
             }
         }
-    ) { padding ->
-        Box(Modifier.padding(padding).fillMaxSize()) {
-            when (selected) {
-                0 -> HomeScreen(
-                    onCreateRoom = { dialog = "create" },
-                    onJoinRoom = { dialog = "join" }
-                )
-                1 -> RoomsScreen(
-                    refreshKey = refreshKey,
-                    onCreate = { dialog = "create" },
-                    onJoin = { dialog = "join" }
-                )
-                2 -> ComingSoon("Tournaments", "Brackets, schedules and results. Coming in Stage 6.")
-                3 -> ComingSoon("Notifications", "Invites, matches and announcements. Coming in Stage 8.")
-                else -> ProfileScreen(onLogout)
-            }
+
+        if (dialog == "create") {
+            CreateRoomDialog(
+                onDismiss = { dialog = null },
+                onCreated = { room ->
+                    dialog = null
+                    createdRoom = room
+                    refreshKey++
+                    selected = 1
+                }
+            )
+        } else if (dialog == "join") {
+            JoinRoomDialog(
+                onDismiss = { dialog = null },
+                onJoined = {
+                    dialog = null
+                    refreshKey++
+                    selected = 1
+                }
+            )
         }
-    }
 
-    if (dialog == "create") {
-        CreateRoomDialog(
-            onDismiss = { dialog = null },
-            onCreated = { room ->
-                dialog = null
-                createdRoom = room
-                refreshKey++
-                selected = 1
-            }
-        )
-    } else if (dialog == "join") {
-        JoinRoomDialog(
-            onDismiss = { dialog = null },
-            onJoined = {
-                dialog = null
-                refreshKey++
-                selected = 1
-            }
-        )
-    }
-
-    createdRoom?.let { room ->
-        RoomCreatedDialog(room = room, onDone = { createdRoom = null })
+        createdRoom?.let { room ->
+            RoomCreatedDialog(room = room, onDone = { createdRoom = null })
+        }
     }
 }
 
@@ -432,7 +445,12 @@ fun RoomCreatedDialog(room: RoomInfo, onDone: () -> Unit) {
 }
 
 @Composable
-fun RoomsScreen(refreshKey: Int, onCreate: () -> Unit, onJoin: () -> Unit) {
+fun RoomsScreen(
+    refreshKey: Int,
+    onCreate: () -> Unit,
+    onJoin: () -> Unit,
+    onOpen: (RoomInfo) -> Unit
+) {
     val ctx = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
@@ -503,6 +521,11 @@ fun RoomsScreen(refreshKey: Int, onCreate: () -> Unit, onJoin: () -> Unit) {
                             (if (room.role == "owner") "Owner" else "Member"),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Button(
+                        onClick = { onOpen(room) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Blue)
+                    ) { Text("Open chat") }
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton(onClick = {
                             clipboard.setText(AnnotatedString(room.code))

@@ -297,3 +297,24 @@ object SupabaseApi {
             request("/rest/v1/rpc/delete_message", body, true)
             Unit
         }
+    suspend fun deleteRoom(roomId: String) =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("p_room_id", roomId)
+            request("/rest/v1/rpc/delete_room", body, true)
+            Unit
+        }
+    suspend fun deleteRoom(roomId: String) =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("p_room_id", roomId)
+            request("/rest/v1/rpc/delete_room", body, true)
+            Unit
+        }
+            suspend fun deleteRoom(roomId: String) =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("p_room_id", roomId)
+            request("/rest/v1/rpc/delete_room", body, true)
+            Unit
+        }
+}
+        
+

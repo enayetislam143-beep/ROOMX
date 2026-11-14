@@ -1,5 +1,7 @@
 package com.enayet.roomx
 
+import android.content.Context
+import android.content.SharedPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -21,6 +23,9 @@ object SupabaseApi {
     private const val BASE_URL = "https://auvathuvfzfeqnwwkoyb.supabase.co"
     private const val API_KEY = "sb_publishable_MrS0c9eYluNL9DHB_5AALg_x0_ayu7T"
 
+    private var prefs: SharedPreferences? = null
+    private var refreshToken: String? = null
+
     var accessToken: String? = null
         private set
     var userId: String? = null
@@ -33,7 +38,73 @@ object SupabaseApi {
     val isLoggedIn: Boolean
         get() = accessToken != null
 
-    private fun request(path: String, body: JSONObject, withAuth: Boolean): String {
+    fun init(context: Context) {
+        if (prefs != null) return
+        val p = context.applicationContext
+            .getSharedPreferences("roomx_session", Context.MODE_PRIVATE)
+        prefs = p
+        accessToken = p.getString("access", null)
+        refreshToken = p.getString("refresh", null)
+        userId = p.getString("user_id", null)
+        username = p.getString("username", null)
+        email = p.getString("email", null)
+    }
+
+    private fun saveSession() {
+        prefs?.edit()
+            ?.putString("access", accessToken)
+            ?.putString("refresh", refreshToken)
+            ?.putString("user_id", userId)
+            ?.putString("username", username)
+            ?.putString("email", email)
+            ?.apply()
+    }
+
+    private fun clearSession() {
+        accessToken = null
+        refreshToken = null
+        userId = null
+        username = null
+        email = null
+        prefs?.edit()?.clear()?.apply()
+    }
+
+    private fun refreshBlocking(): Boolean {
+        val rt = refreshToken ?: return false
+        val conn = URL("$BASE_URL/auth/v1/token?grant_type=refresh_token")
+            .openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 15000
+            conn.readTimeout = 15000
+            conn.doOutput = true
+            conn.setRequestProperty("apikey", API_KEY)
+            conn.setRequestProperty("Content-Type", "application/json")
+            val payload = JSONObject().put("refresh_token", rt).toString()
+            conn.outputStream.use { it.write(payload.toByteArray()) }
+
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
+            if (code in 200..299) {
+                applySession(JSONObject(text))
+                return true
+            }
+            if (code in 400..499) clearSession()
+            return false
+        } catch (e: Exception) {
+            return false
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    private fun request(
+        path: String,
+        body: JSONObject,
+        withAuth: Boolean,
+        canRetry: Boolean = true
+    ): String {
         val conn = URL(BASE_URL + path).openConnection() as HttpURLConnection
         try {
             conn.requestMethod = "POST"
@@ -51,6 +122,10 @@ object SupabaseApi {
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
             val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
+
+            if (code == 401 && withAuth && canRetry && refreshBlocking()) {
+                return request(path, body, withAuth, false)
+            }
 
             if (code !in 200..299) {
                 val json = try {
@@ -86,9 +161,12 @@ object SupabaseApi {
         }
         val user = json.getJSONObject("user")
         accessToken = token
+        val newRefresh = json.optString("refresh_token")
+        if (newRefresh.isNotBlank()) refreshToken = newRefresh
         userId = user.optString("id")
         email = user.optString("email")
         username = user.optJSONObject("user_metadata")?.optString("username")
+        saveSession()
     }
 
     suspend fun signUp(email: String, password: String, username: String) =
@@ -109,10 +187,7 @@ object SupabaseApi {
         }
 
     fun signOut() {
-        accessToken = null
-        userId = null
-        username = null
-        email = null
+        clearSession()
     }
 
     suspend fun createRoom(name: String, description: String): RoomInfo =

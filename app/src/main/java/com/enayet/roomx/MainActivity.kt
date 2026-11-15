@@ -26,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -64,11 +65,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun SystemBars(dark: Boolean) {
     val view = LocalView.current
-    val bg = LocalRx.current.bg
+    val rx = LocalRx.current
     SideEffect {
         val window = (view.context as Activity).window
-        window.statusBarColor = bg.toArgb()
-        window.navigationBarColor = bg.toArgb()
+        window.statusBarColor = rx.bgTop.toArgb()
+        window.navigationBarColor = rx.bgBottom.toArgb()
         val controller = WindowCompat.getInsetsController(window, view)
         controller.isAppearanceLightStatusBars = !dark
         controller.isAppearanceLightNavigationBars = !dark
@@ -102,7 +103,7 @@ fun RoomXRoot(dark: Boolean, onToggleTheme: () -> Unit) {
 @Composable
 fun ThemeToggle(dark: Boolean, onToggle: () -> Unit) {
     Box(
-        Modifier.size(40.dp).pressScale(onToggle).glass(CircleShape),
+        Modifier.size(46.dp).pressScale(onToggle).glass(CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Text(if (dark) "☀️" else "🌙", fontSize = 18.sp)
@@ -157,42 +158,57 @@ fun AuthScreen(dark: Boolean, onToggleTheme: () -> Unit, onDone: () -> Unit) {
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Row(Modifier.fillMaxWidth()) {
             Spacer(Modifier.weight(1f))
             ThemeToggle(dark, onToggleTheme)
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(12.dp))
         Appear(0) {
-            Column {
-                Text(
-                    "ROOMX",
-                    style = TextStyle(
-                        brush = rxBrush(),
-                        fontSize = 44.sp,
-                        fontWeight = FontWeight.ExtraBold
+            Box(
+                Modifier.size(104.dp).glass(RoundedCornerShape(32.dp), strong = true),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    Modifier.size(66.dp).clip(RoundedCornerShape(22.dp)).background(rxBrush()),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        if (isSignUp) Icons.Default.Person else Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = Color.White
                     )
-                )
-                Text("Connect. Communicate. Compete.", color = RxPurple)
+                }
             }
         }
-        Spacer(Modifier.height(8.dp))
-        Appear(120) {
+        Appear(100) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    if (isSignUp) "Create account" else "Welcome back",
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    if (isSignUp) "Join ROOMX in seconds" else "Log in to your account",
+                    color = rx.muted
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Appear(180) {
             GlassPanel(Modifier.fillMaxWidth(), strong = true) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        if (isSignUp) "Create your account" else "Welcome back",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     if (isSignUp) {
                         OutlinedTextField(
                             value = username,
                             onValueChange = { username = it },
-                            label = { Text("Username (3-20 characters)") },
+                            placeholder = { Text("Username (3-20 characters)") },
+                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                             singleLine = true,
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(18.dp),
                             colors = glassFieldColors(),
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -200,21 +216,23 @@ fun AuthScreen(dark: Boolean, onToggleTheme: () -> Unit, onDone: () -> Unit) {
                     OutlinedTextField(
                         value = email,
                         onValueChange = { email = it },
-                        label = { Text("Email") },
+                        placeholder = { Text("you@example.com") },
+                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(18.dp),
                         colors = glassFieldColors(),
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it },
-                        label = { Text("Password (6+ characters)") },
+                        placeholder = { Text("Password (6+ characters)") },
+                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(18.dp),
                         colors = glassFieldColors(),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -256,16 +274,22 @@ fun AuthScreen(dark: Boolean, onToggleTheme: () -> Unit, onDone: () -> Unit) {
                 }
             }
         }
-        TextButton(
-            onClick = {
-                isSignUp = !isSignUp
-                error = null
-            },
-            modifier = Modifier.fillMaxWidth()
+        Row(
+            Modifier.padding(top = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                if (isSignUp) "Already have an account? Log in" else "New here? Create an account",
+                if (isSignUp) "Already have an account? " else "Don't have an account? ",
                 color = rx.muted
+            )
+            Text(
+                if (isSignUp) "Log in" else "Create one",
+                color = RxBlue,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable {
+                    isSignUp = !isSignUp
+                    error = null
+                }
             )
         }
     }
@@ -283,6 +307,14 @@ fun shareRoom(ctx: Context, name: String, code: String) {
     }
 }
 
+fun roleName(role: String): String {
+    return when (role) {
+        "owner" -> "Owner"
+        "moderator" -> "Moderator"
+        else -> "Member"
+    }
+}
+
 @Composable
 fun RoomXApp(dark: Boolean, onToggleTheme: () -> Unit, onLogout: () -> Unit) {
     val rx = LocalRx.current
@@ -291,7 +323,7 @@ fun RoomXApp(dark: Boolean, onToggleTheme: () -> Unit, onLogout: () -> Unit) {
         GlassTab("Rooms", Icons.Default.Email),
         GlassTab("Tournaments", Icons.Default.Star),
         GlassTab("Alerts", Icons.Default.Notifications),
-        GlassTab("Profile", Icons.Default.AccountCircle)
+        GlassTab("Profile", Icons.Default.Person)
     )
     val scope = rememberCoroutineScope()
     var selected by remember { mutableIntStateOf(0) }
@@ -328,7 +360,9 @@ fun RoomXApp(dark: Boolean, onToggleTheme: () -> Unit, onLogout: () -> Unit) {
         Scaffold(
             containerColor = Color.Transparent,
             contentColor = rx.text,
-            topBar = { TopBar(dark, onToggleTheme) },
+            topBar = {
+                if (selected != 0) TopBar(dark, onToggleTheme)
+            },
             bottomBar = {
                 GlassBottomBar(tabs = tabs, selected = selected, onSelect = { selected = it })
             }
@@ -343,9 +377,13 @@ fun RoomXApp(dark: Boolean, onToggleTheme: () -> Unit, onLogout: () -> Unit) {
                         0 -> HomeScreen(
                             rooms = rooms,
                             loading = loading,
+                            dark = dark,
+                            onToggleTheme = onToggleTheme,
                             onCreateRoom = { dialog = "create" },
                             onJoinRoom = { dialog = "join" },
+                            onSearch = { selected = 1 },
                             onTournaments = { selected = 2 },
+                            onAlerts = { selected = 3 },
                             onViewAll = { selected = 1 },
                             onOpen = { openRoom = it }
                         )
@@ -434,7 +472,7 @@ fun Chip(text: String, tint: Color = RxBlue) {
 fun SegmentedTabs(options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
     val rx = LocalRx.current
     Row(
-        Modifier.fillMaxWidth().glass(RoundedCornerShape(16.dp)).padding(4.dp),
+        Modifier.fillMaxWidth().glass(RoundedCornerShape(18.dp)).padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         options.forEachIndexed { i, label ->
@@ -442,12 +480,10 @@ fun SegmentedTabs(options: List<String>, selected: Int, onSelect: (Int) -> Unit)
             Box(
                 Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(14.dp))
                     .background(
                         if (active) rxBrush()
-                        else androidx.compose.ui.graphics.Brush.horizontalGradient(
-                            listOf(Color.Transparent, Color.Transparent)
-                        )
+                        else Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
                     )
                     .clickable { onSelect(i) }
                     .padding(vertical = 10.dp),
@@ -460,24 +496,6 @@ fun SegmentedTabs(options: List<String>, selected: Int, onSelect: (Int) -> Unit)
                     color = if (active) Color.White else rx.muted
                 )
             }
-        }
-    }
-}
-
-@Composable
-fun StatCard(value: Int, label: String, modifier: Modifier = Modifier) {
-    val rx = LocalRx.current
-    GlassPanel(modifier) {
-        Column {
-            Text(
-                value.toString(),
-                style = TextStyle(
-                    brush = rxBrush(),
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.ExtraBold
-                )
-            )
-            Text(label, color = rx.muted, fontSize = 13.sp)
         }
     }
 }
@@ -498,7 +516,7 @@ fun EmptyState(title: String, note: String) {
 }
 
 @Composable
-fun RoomCard(room: RoomInfo, compact: Boolean, onOpen: () -> Unit, onLeave: () -> Unit) {
+fun RoomCard(room: RoomInfo, onOpen: () -> Unit, onLeave: () -> Unit) {
     val rx = LocalRx.current
     val ctx = LocalContext.current
     val clipboard = LocalClipboardManager.current
@@ -529,32 +547,23 @@ fun RoomCard(room: RoomInfo, compact: Boolean, onOpen: () -> Unit, onLeave: () -
                     Chip("Closed", Color(0xFFF59E0B))
                 }
             }
-            if (!compact && room.description.isNotBlank()) {
+            if (room.description.isNotBlank()) {
                 Text(room.description, color = rx.muted, fontSize = 14.sp)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Chip(room.code)
-                Chip(
-                    when (room.role) {
-                        "owner" -> "Owner"
-                        "moderator" -> "Moderator"
-                        else -> "Member"
-                    },
-                    RxPurple
-                )
+                Chip(roleName(room.role), RxPurple)
             }
-            if (!compact) {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(onClick = {
-                        clipboard.setText(AnnotatedString(room.code))
-                        Toast.makeText(ctx, "Code copied", Toast.LENGTH_SHORT).show()
-                    }) { Text("Copy code") }
-                    TextButton(onClick = { shareRoom(ctx, room.name, room.code) }) {
-                        Text("Share")
-                    }
-                    if (room.role != "owner") {
-                        TextButton(onClick = onLeave) { Text("Leave") }
-                    }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = {
+                    clipboard.setText(AnnotatedString(room.code))
+                    Toast.makeText(ctx, "Code copied", Toast.LENGTH_SHORT).show()
+                }) { Text("Copy code") }
+                TextButton(onClick = { shareRoom(ctx, room.name, room.code) }) {
+                    Text("Share")
+                }
+                if (room.role != "owner") {
+                    TextButton(onClick = onLeave) { Text("Leave") }
                 }
             }
         }
@@ -565,14 +574,22 @@ fun RoomCard(room: RoomInfo, compact: Boolean, onOpen: () -> Unit, onLeave: () -
 fun HomeScreen(
     rooms: List<RoomInfo>,
     loading: Boolean,
+    dark: Boolean,
+    onToggleTheme: () -> Unit,
     onCreateRoom: () -> Unit,
     onJoinRoom: () -> Unit,
+    onSearch: () -> Unit,
     onTournaments: () -> Unit,
+    onAlerts: () -> Unit,
     onViewAll: () -> Unit,
     onOpen: (RoomInfo) -> Unit
 ) {
     val rx = LocalRx.current
     val name = SupabaseApi.username?.takeIf { it.isNotBlank() } ?: "player"
+    val totalMembers = rooms.sumOf { it.members }
+    val totalCapacity = rooms.sumOf { it.capacity }
+    val progress = if (totalCapacity > 0) totalMembers.toFloat() / totalCapacity else 0f
+    val percent = (progress * 100f).toInt()
 
     Column(
         Modifier
@@ -583,81 +600,125 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Appear(0) {
-            GlassPanel(Modifier.fillMaxWidth(), strong = true) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Welcome back,", color = rx.muted)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Hey, ", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
-                        Text(
-                            name,
-                            style = TextStyle(
-                                brush = rxBrush(),
-                                fontSize = 28.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                        )
-                        Text(" 👋", fontSize = 28.sp)
-                    }
+            Row(
+                Modifier.fillMaxWidth().padding(top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier.size(52.dp).glass(CircleShape, strong = true),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Person, contentDescription = null, tint = rx.text)
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Hello, $name!", fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     Text(
-                        "Your communities, conversations, and competitions — all in one place.",
-                        color = rx.muted
+                        "Welcome back to your dashboard",
+                        fontSize = 13.sp,
+                        color = rx.muted,
+                        maxLines = 2
                     )
-                    Spacer(Modifier.height(4.dp))
-                    GradientButton(
-                        text = "+  Create room",
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = onCreateRoom
-                    )
-                    GlassButton(
-                        text = "Join with code",
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = onJoinRoom
-                    )
-                    GlassButton(
-                        text = "Browse tournaments",
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = onTournaments
-                    )
+                }
+                ThemeToggle(dark, onToggleTheme)
+                Spacer(Modifier.width(8.dp))
+                GlassIconButton(Icons.Default.Notifications, onAlerts)
+            }
+        }
+
+        Appear(100) {
+            GlassPanel(Modifier.fillMaxWidth(), strong = true) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Room Capacity", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+                        Text("$percent%", fontSize = 52.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(
+                            if (rooms.isEmpty()) "Create your first room"
+                            else "↑ $totalMembers members in ${rooms.size} " +
+                                (if (rooms.size == 1) "room" else "rooms"),
+                            color = RxBlue,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
+                        )
+                    }
+                    ProgressRing(progress)
                 }
             }
         }
+
+        Appear(180) {
+            QuickActionsRow(
+                listOf(
+                    QuickAction("Create", Icons.Default.Add, onCreateRoom),
+                    QuickAction("Join", Icons.Default.ArrowForward, onJoinRoom),
+                    QuickAction("Search", Icons.Default.Search, onSearch),
+                    QuickAction("Tournaments", Icons.Default.Star, onTournaments)
+                )
+            )
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.weight(1f)) {
-                Appear(150) {
-                    StatCard(rooms.size, "My rooms", Modifier.fillMaxWidth())
+                Appear(260) {
+                    StatTile(
+                        rooms.size.toString(),
+                        "Total Rooms",
+                        Icons.Default.Email,
+                        Modifier.fillMaxWidth()
+                    )
                 }
             }
             Box(Modifier.weight(1f)) {
-                Appear(230) {
-                    StatCard(rooms.count { it.role == "owner" }, "Rooms you own", Modifier.fillMaxWidth())
+                Appear(320) {
+                    StatTile(
+                        totalMembers.toString(),
+                        "Total Members",
+                        Icons.Default.AccountCircle,
+                        Modifier.fillMaxWidth()
+                    )
                 }
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "Your rooms",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                "View all →",
-                color = RxBlue,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clickable { onViewAll() }
-            )
-        }
-        if (loading && rooms.isEmpty()) {
-            CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
-        } else if (rooms.isEmpty()) {
-            EmptyState(
-                "No rooms yet",
-                "Create your first room, or join a friend's room with a code."
-            )
-        } else {
-            rooms.take(3).forEachIndexed { index, room ->
-                Appear(delayMs = 300 + index * 90) {
-                    RoomCard(room, compact = true, onOpen = { onOpen(room) }, onLeave = {})
+
+        Appear(380) {
+            GlassPanel(Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Recent Activity",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            "View All →",
+                            fontSize = 14.sp,
+                            modifier = Modifier.clickable { onViewAll() }
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    if (loading && rooms.isEmpty()) {
+                        CircularProgressIndicator(modifier = Modifier.size(26.dp), strokeWidth = 3.dp)
+                    } else if (rooms.isEmpty()) {
+                        Text(
+                            "No rooms yet. Create one or join with a code.",
+                            color = rx.muted,
+                            fontSize = 14.sp
+                        )
+                    } else {
+                        rooms.take(3).forEach { room ->
+                            ActivityRow(
+                                title = room.name,
+                                subtitle = "${room.code} · ${roleName(room.role)}",
+                                trailing = "${room.members}/${room.capacity}",
+                                icon = Icons.Default.Email,
+                                onClick = { onOpen(room) }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -716,7 +777,7 @@ fun RoomsScreen(
             placeholder = { Text("Search rooms by name or code...") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             singleLine = true,
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(18.dp),
             colors = glassFieldColors(),
             modifier = Modifier.fillMaxWidth()
         )
@@ -738,7 +799,7 @@ fun RoomsScreen(
         }
         shown.forEachIndexed { index, room ->
             Appear(delayMs = index * 80) {
-                RoomCard(room, compact = false, onOpen = { onOpen(room) }, onLeave = { onLeave(room) })
+                RoomCard(room, onOpen = { onOpen(room) }, onLeave = { onLeave(room) })
             }
         }
     }
@@ -799,7 +860,12 @@ fun NotificationsScreen() {
 }
 
 @Composable
-fun InfoRow(label: String, value: String, valueColor: Color = Color.Unspecified, onClick: (() -> Unit)? = null) {
+fun InfoRow(
+    label: String,
+    value: String,
+    valueColor: Color = Color.Unspecified,
+    onClick: (() -> Unit)? = null
+) {
     val rx = LocalRx.current
     Row(
         Modifier

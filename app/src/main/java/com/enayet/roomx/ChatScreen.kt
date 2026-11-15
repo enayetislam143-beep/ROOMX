@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -16,6 +17,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -25,9 +28,6 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-
-private val ChatBlue = Color(0xFF2F80FF)
-private val ChatPurple = Color(0xFF8B5CF6)
 
 private fun timeLabel(iso: String): String {
     return try {
@@ -51,6 +51,7 @@ private fun roleLabel(role: String): String {
 @Composable
 fun ChatScreen(room: RoomInfo, onBack: () -> Unit) {
     BackHandler(onBack = onBack)
+    val rx = LocalRx.current
 
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -66,6 +67,7 @@ fun ChatScreen(room: RoomInfo, onBack: () -> Unit) {
     var menuOpen by remember { mutableStateOf(false) }
     var confirmDeleteRoom by remember { mutableStateOf(false) }
     val canModerate = myRole == "owner" || myRole == "moderator"
+    val canSend = !sending && !closed && input.isNotBlank()
 
     LaunchedEffect(room.id) {
         while (true) {
@@ -91,31 +93,33 @@ fun ChatScreen(room: RoomInfo, onBack: () -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Column(Modifier.fillMaxSize()) {
         Row(
-            Modifier.fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(horizontal = 4.dp, vertical = 8.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .glass(RoundedCornerShape(26.dp), strong = true)
+                .padding(horizontal = 6.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = rx.text)
             }
             Column(Modifier.weight(1f)) {
-                Text(room.name, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(room.name, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                 Text(
                     "Code: ${room.code}" + (if (closed) "  •  Closed" else ""),
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = rx.muted
                 )
             }
             IconButton(onClick = { showMembers = true }) {
-                Icon(Icons.Default.Person, contentDescription = "Members")
+                RxGlyphIcon(RxGlyph.Person, rx.text, iconSize = 24.dp)
             }
             if (myRole == "owner") {
                 Box {
                     IconButton(onClick = { menuOpen = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Room options")
+                        Icon(Icons.Default.MoreVert, contentDescription = "Room options", tint = rx.text)
                     }
                     DropdownMenu(
                         expanded = menuOpen,
@@ -158,7 +162,7 @@ fun ChatScreen(room: RoomInfo, onBack: () -> Unit) {
                 Text(
                     "No messages yet. Say hello!",
                     modifier = Modifier.align(Alignment.Center),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = rx.muted
                 )
             } else {
                 LazyColumn(
@@ -173,40 +177,56 @@ fun ChatScreen(room: RoomInfo, onBack: () -> Unit) {
                             Modifier.fillMaxWidth(),
                             horizontalAlignment = if (mine) Alignment.End else Alignment.Start
                         ) {
-                            Box(
-                                Modifier.widthIn(max = 280.dp)
-                                    .background(
-                                        if (mine) ChatBlue else MaterialTheme.colorScheme.surface,
-                                        RoundedCornerShape(16.dp)
-                                    )
-                                    .padding(10.dp)
-                            ) {
-                                Column {
-                                    if (!mine) {
+                            if (mine) {
+                                val shape = RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp)
+                                Box(
+                                    Modifier
+                                        .widthIn(max = 290.dp)
+                                        .clip(shape)
+                                        .background(rxBrush())
+                                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                                ) {
+                                    Column {
+                                        Text(msg.content, color = Color.White)
+                                        Text(
+                                            timeLabel(msg.createdAt),
+                                            fontSize = 10.sp,
+                                            color = Color.White.copy(alpha = 0.8f)
+                                        )
+                                    }
+                                }
+                            } else {
+                                val shape = RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp)
+                                Box(
+                                    Modifier
+                                        .widthIn(max = 290.dp)
+                                        .glass(shape)
+                                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                                ) {
+                                    Column {
                                         Text(
                                             msg.username,
-                                            color = ChatPurple,
+                                            color = RxBlue,
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold
                                         )
+                                        Text(msg.content, color = rx.text)
+                                        Text(
+                                            timeLabel(msg.createdAt),
+                                            fontSize = 10.sp,
+                                            color = rx.muted
+                                        )
                                     }
-                                    Text(msg.content)
-                                    Text(
-                                        timeLabel(msg.createdAt),
-                                        fontSize = 10.sp,
-                                        color = if (mine) Color(0xFFDDE8FF)
-                                        else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
                                 }
                             }
                             if (mine || canModerate) {
                                 Text(
                                     "Delete",
                                     fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = rx.muted,
                                     modifier = Modifier
                                         .clickable { deleting = msg }
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        .padding(horizontal = 8.dp, vertical = 2.dp)
                                 )
                             }
                         }
@@ -228,15 +248,15 @@ fun ChatScreen(room: RoomInfo, onBack: () -> Unit) {
             Text(
                 "This room is closed. Nobody can send messages.",
                 fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = rx.muted,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
             )
         }
 
         Row(
-            Modifier.fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(8.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedTextField(
@@ -245,28 +265,35 @@ fun ChatScreen(room: RoomInfo, onBack: () -> Unit) {
                 placeholder = { Text(if (closed) "Room is closed" else "Message") },
                 enabled = !closed,
                 maxLines = 4,
+                shape = RoundedCornerShape(26.dp),
+                colors = glassFieldColors(),
                 modifier = Modifier.weight(1f)
             )
             Spacer(Modifier.width(8.dp))
-            IconButton(
-                enabled = !sending && !closed && input.isNotBlank(),
-                onClick = {
-                    val text = input.trim()
-                    scope.launch {
-                        sending = true
-                        error = null
-                        try {
-                            SupabaseApi.sendMessage(room.id, text)
-                            input = ""
-                            messages = SupabaseApi.getMessages(room.id)
-                        } catch (e: Exception) {
-                            error = e.message ?: "Could not send the message."
+            Box(
+                Modifier
+                    .size(52.dp)
+                    .alpha(if (canSend) 1f else 0.45f)
+                    .clip(CircleShape)
+                    .background(rxBrush())
+                    .clickable(enabled = canSend) {
+                        val text = input.trim()
+                        scope.launch {
+                            sending = true
+                            error = null
+                            try {
+                                SupabaseApi.sendMessage(room.id, text)
+                                input = ""
+                                messages = SupabaseApi.getMessages(room.id)
+                            } catch (e: Exception) {
+                                error = e.message ?: "Could not send the message."
+                            }
+                            sending = false
                         }
-                        sending = false
-                    }
-                }
+                    },
+                contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Send, contentDescription = "Send", tint = ChatBlue)
+                Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.White)
             }
         }
     }

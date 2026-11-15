@@ -15,6 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -30,7 +31,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-enum class RxGlyph { Home, Grid, Bell, Person, Search, Bars, Trophy, Plus, Join, Chat }
+enum class RxGlyph {
+    Home, Grid, Bell, Person, PersonCircle, Search, Bars, Trophy, Plus, Join, Chat
+}
 
 @Composable
 fun RxGlyphIcon(
@@ -100,6 +103,15 @@ fun RxGlyphIcon(
                         cubicTo(16f, 14f, 19.5f, 15.5f, 19.5f, 20f)
                     }
                     drawCircle(tint, radius = 3.7f, center = Offset(12f, 8f), style = st)
+                    drawPath(shoulders, tint, style = st)
+                }
+                RxGlyph.PersonCircle -> {
+                    val shoulders = Path().apply {
+                        moveTo(6.8f, 17.6f)
+                        cubicTo(7.8f, 14.6f, 16.2f, 14.6f, 17.2f, 17.6f)
+                    }
+                    drawCircle(tint, radius = 9.5f, center = Offset(12f, 12f), style = st)
+                    drawCircle(tint, radius = 2.8f, center = Offset(12f, 9.8f), style = st)
                     drawPath(shoulders, tint, style = st)
                 }
                 RxGlyph.Search -> {
@@ -183,12 +195,29 @@ data class RxTab(val label: String, val glyph: RxGlyph)
 @Composable
 fun RxBottomBar(tabs: List<RxTab>, selected: Int, onSelect: (Int) -> Unit) {
     val rx = LocalRx.current
-    Box(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
+    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .glass(RoundedCornerShape(34.dp), strong = true)
-                .padding(6.dp),
+                .glass(RoundedCornerShape(50), strong = true)
+                .drawBehind {
+                    drawRect(
+                        Brush.horizontalGradient(
+                            listOf(
+                                Color.White.copy(alpha = 0.14f),
+                                Color.Transparent,
+                                Color.White.copy(alpha = 0.14f)
+                            )
+                        )
+                    )
+                    drawRect(
+                        Brush.verticalGradient(
+                            listOf(Color.White.copy(alpha = 0.20f), Color.Transparent),
+                            endY = size.height * 0.55f
+                        )
+                    )
+                }
+                .padding(horizontal = 6.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             tabs.forEachIndexed { i, tab ->
@@ -199,27 +228,33 @@ fun RxBottomBar(tabs: List<RxTab>, selected: Int, onSelect: (Int) -> Unit) {
                     label = "rxTab$i"
                 )
                 val tint by animateColorAsState(
-                    targetValue = if (active) Color.White else rx.text.copy(alpha = 0.85f),
+                    targetValue = if (active) {
+                        if (rx.dark) Color.White else Color(0xFF1D4ED8)
+                    } else {
+                        rx.text.copy(alpha = 0.82f)
+                    },
                     animationSpec = tween(300),
                     label = "rxTint$i"
                 )
-                Box(
+                val pillAlpha = (if (rx.dark) 0.22f else 0.80f) * progress
+                Column(
                     Modifier
-                        .weight(1f + 0.5f * progress)
-                        .height(56.dp)
-                        .clip(RoundedCornerShape(30.dp))
-                        .background(
-                            Brush.linearGradient(
-                                listOf(
-                                    RxBlue.copy(alpha = progress),
-                                    Color(0xFF1D4ED8).copy(alpha = progress)
-                                )
-                            )
-                        )
-                        .clickable { onSelect(i) },
-                    contentAlignment = Alignment.Center
+                        .weight(1f)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.White.copy(alpha = pillAlpha))
+                        .clickable { onSelect(i) }
+                        .padding(vertical = 9.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
-                    RxGlyphIcon(tab.glyph, tint, iconSize = 27.dp)
+                    RxGlyphIcon(tab.glyph, tint, iconSize = 24.dp)
+                    Text(
+                        tab.label,
+                        fontSize = 10.sp,
+                        color = tint,
+                        maxLines = 1,
+                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal
+                    )
                 }
             }
         }

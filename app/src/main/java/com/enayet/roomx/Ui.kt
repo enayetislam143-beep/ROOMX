@@ -19,6 +19,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
@@ -34,10 +35,14 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -57,49 +62,52 @@ fun rxBrush(): Brush = Brush.horizontalGradient(listOf(RxBlue, RxPurple))
 data class RxPalette(
     val dark: Boolean,
     val bg: Color,
+    val bgTop: Color,
+    val bgMid: Color,
+    val bgBottom: Color,
+    val wave1: Color,
+    val wave2: Color,
+    val wave3: Color,
     val glassHi: Color,
     val glassLo: Color,
     val borderHi: Color,
     val borderLo: Color,
     val text: Color,
-    val muted: Color,
-    val orbBlue: Color,
-    val orbPurple: Color,
-    val orbCyan: Color,
-    val activeTint: Color,
-    val activePill: Float
+    val muted: Color
 )
 
 val DarkPalette = RxPalette(
     dark = true,
-    bg = RxBg,
-    glassHi = Color.White.copy(alpha = 0.10f),
-    glassLo = Color.White.copy(alpha = 0.03f),
-    borderHi = Color.White.copy(alpha = 0.35f),
-    borderLo = Color.White.copy(alpha = 0.06f),
+    bg = Color(0xFF08103A),
+    bgTop = Color(0xFF08103A),
+    bgMid = Color(0xFF0B1B66),
+    bgBottom = Color(0xFF050A28),
+    wave1 = Color(0xFF4F7BFF).copy(alpha = 0.55f),
+    wave2 = Color(0xFF7C5CFF).copy(alpha = 0.40f),
+    wave3 = Color(0xFF22D3EE).copy(alpha = 0.25f),
+    glassHi = Color(0xFFBFD0FF).copy(alpha = 0.16f),
+    glassLo = Color(0xFF8AA4FF).copy(alpha = 0.05f),
+    borderHi = Color.White.copy(alpha = 0.42f),
+    borderLo = Color(0xFF6F8CFF).copy(alpha = 0.22f),
     text = Color.White,
-    muted = RxMuted,
-    orbBlue = RxBlue.copy(alpha = 0.40f),
-    orbPurple = RxPurple.copy(alpha = 0.34f),
-    orbCyan = RxCyan.copy(alpha = 0.18f),
-    activeTint = Color.White,
-    activePill = 0.45f
+    muted = Color(0xFFA9B6DD)
 )
 
 val LightPalette = RxPalette(
     dark = false,
-    bg = Color(0xFFE9EEFA),
-    glassHi = Color.White.copy(alpha = 0.80f),
-    glassLo = Color.White.copy(alpha = 0.40f),
+    bg = Color(0xFFDCEBFF),
+    bgTop = Color(0xFFDCEBFF),
+    bgMid = Color(0xFFA9C8FF),
+    bgBottom = Color(0xFFC7DBFF),
+    wave1 = Color.White.copy(alpha = 0.65f),
+    wave2 = Color(0xFF5B8CFF).copy(alpha = 0.35f),
+    wave3 = Color(0xFF22D3EE).copy(alpha = 0.22f),
+    glassHi = Color.White.copy(alpha = 0.70f),
+    glassLo = Color.White.copy(alpha = 0.32f),
     borderHi = Color.White.copy(alpha = 0.95f),
-    borderLo = Color(0xFF9FB0D6).copy(alpha = 0.45f),
-    text = Color(0xFF0F1222),
-    muted = Color(0xFF5B6478),
-    orbBlue = RxBlue.copy(alpha = 0.38f),
-    orbPurple = RxPurple.copy(alpha = 0.30f),
-    orbCyan = RxCyan.copy(alpha = 0.28f),
-    activeTint = Color(0xFF1F5FD6),
-    activePill = 0.20f
+    borderLo = Color.White.copy(alpha = 0.40f),
+    text = Color(0xFF0B1B4D),
+    muted = Color(0xFF4A5D91)
 )
 
 val LocalRx = staticCompositionLocalOf { DarkPalette }
@@ -123,25 +131,25 @@ fun RxTheme(dark: Boolean, content: @Composable () -> Unit) {
         darkColorScheme(
             primary = RxBlue,
             secondary = RxPurple,
-            background = RxBg,
-            surface = Color(0xFF16161D),
-            surfaceVariant = Color(0xFF1E1E28),
+            background = Color(0xFF08103A),
+            surface = Color(0xFF111B52),
+            surfaceVariant = Color(0xFF1A2766),
             onPrimary = Color.White,
             onBackground = Color.White,
             onSurface = Color.White,
-            onSurfaceVariant = RxMuted
+            onSurfaceVariant = Color(0xFFA9B6DD)
         )
     } else {
         lightColorScheme(
             primary = RxBlue,
             secondary = RxPurple,
-            background = Color(0xFFE9EEFA),
+            background = Color(0xFFDCEBFF),
             surface = Color.White,
-            surfaceVariant = Color(0xFFE4E9F5),
+            surfaceVariant = Color(0xFFE4ECFB),
             onPrimary = Color.White,
-            onBackground = Color(0xFF0F1222),
-            onSurface = Color(0xFF0F1222),
-            onSurfaceVariant = Color(0xFF5B6478)
+            onBackground = Color(0xFF0B1B4D),
+            onSurface = Color(0xFF0B1B4D),
+            onSurfaceVariant = Color(0xFF4A5D91)
         )
     }
     CompositionLocalProvider(LocalRx provides rx) {
@@ -169,7 +177,7 @@ fun Modifier.glass(
         .border(
             1.dp,
             Brush.linearGradient(
-                listOf(rx.borderHi, rx.borderLo, RxPurple.copy(alpha = 0.35f))
+                listOf(rx.borderHi, rx.borderLo, rx.borderHi.copy(alpha = rx.borderHi.alpha * 0.5f))
             ),
             shape
         )
@@ -212,18 +220,77 @@ fun AmbientBackground(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(9000, easing = LinearEasing),
+            animation = tween(10000, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "orbs"
+        label = "waves"
     )
     Box(modifier.fillMaxSize().background(rx.bg)) {
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
-            orb(rx.orbBlue, w * (0.10f + 0.35f * a), h * (0.10f + 0.06f * a), w * 0.85f)
-            orb(rx.orbPurple, w * (0.95f - 0.35f * a), h * (0.45f + 0.10f * a), w * 0.80f)
-            orb(rx.orbCyan, w * (0.30f + 0.30f * a), h * 0.95f, w * 0.70f)
+            drawRect(Brush.verticalGradient(listOf(rx.bgTop, rx.bgMid, rx.bgBottom)))
+            orb(rx.wave3, w * (0.12f + 0.20f * a), h * 0.08f, w * 0.75f)
+
+            val top = Path().apply {
+                moveTo(w * 0.50f, 0f)
+                cubicTo(
+                    w * (0.80f + 0.06f * a), h * 0.10f,
+                    w * (0.40f - 0.06f * a), h * 0.28f,
+                    w * 0.52f, h * 0.46f
+                )
+                cubicTo(w * 0.62f, h * 0.60f, w * 0.90f, h * 0.52f, w, h * 0.60f)
+                lineTo(w, 0f)
+                close()
+            }
+            drawPath(
+                top,
+                Brush.linearGradient(
+                    listOf(rx.wave1, Color.Transparent),
+                    start = Offset(w, 0f),
+                    end = Offset(w * 0.25f, h * 0.55f)
+                )
+            )
+
+            val mid = Path().apply {
+                moveTo(0f, h * 0.55f)
+                cubicTo(
+                    w * 0.28f, h * (0.46f + 0.05f * a),
+                    w * 0.58f, h * (0.78f - 0.05f * a),
+                    w, h * 0.66f
+                )
+                lineTo(w, h)
+                lineTo(0f, h)
+                close()
+            }
+            drawPath(
+                mid,
+                Brush.verticalGradient(
+                    listOf(rx.wave2, Color.Transparent),
+                    startY = h * 0.45f,
+                    endY = h
+                )
+            )
+
+            val low = Path().apply {
+                moveTo(0f, h * 0.80f)
+                cubicTo(
+                    w * 0.35f, h * (0.74f + 0.04f * a),
+                    w * 0.65f, h * (0.92f - 0.04f * a),
+                    w, h * 0.84f
+                )
+                lineTo(w, h)
+                lineTo(0f, h)
+                close()
+            }
+            drawPath(
+                low,
+                Brush.verticalGradient(
+                    listOf(rx.wave1.copy(alpha = rx.wave1.alpha * 0.6f), Color.Transparent),
+                    startY = h * 0.7f,
+                    endY = h
+                )
+            )
         }
         CompositionLocalProvider(LocalContentColor provides rx.text) {
             content()
@@ -376,7 +443,7 @@ fun glassFieldColors(): androidx.compose.material3.TextFieldColors {
         focusedTextColor = rx.text,
         unfocusedTextColor = rx.text,
         focusedBorderColor = RxBlue,
-        unfocusedBorderColor = rx.text.copy(alpha = 0.18f),
+        unfocusedBorderColor = rx.text.copy(alpha = 0.20f),
         focusedContainerColor = rx.text.copy(alpha = 0.06f),
         unfocusedContainerColor = rx.text.copy(alpha = 0.04f),
         cursorColor = RxBlue,
@@ -385,6 +452,165 @@ fun glassFieldColors(): androidx.compose.material3.TextFieldColors {
         focusedPlaceholderColor = rx.muted,
         unfocusedPlaceholderColor = rx.muted
     )
+}
+
+@Composable
+fun GlassIconButton(
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    badge: Boolean = false
+) {
+    val rx = LocalRx.current
+    Box(modifier.size(48.dp), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.size(46.dp).pressScale(onClick).glass(CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = rx.text)
+        }
+        if (badge) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .size(11.dp)
+                    .clip(CircleShape)
+                    .background(RxPurple)
+            )
+        }
+    }
+}
+
+@Composable
+fun ProgressRing(progress: Float, modifier: Modifier = Modifier) {
+    val rx = LocalRx.current
+    var started by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { started = true }
+    val animated by animateFloatAsState(
+        targetValue = if (started) progress.coerceIn(0f, 1f) else 0f,
+        animationSpec = tween(1200),
+        label = "ring"
+    )
+    Box(modifier.size(112.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val stroke = 14.dp.toPx()
+            val inset = stroke / 2f
+            val arcSize = Size(size.width - stroke, size.height - stroke)
+            drawArc(
+                color = rx.text.copy(alpha = 0.10f),
+                startAngle = -90f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = Offset(inset, inset),
+                size = arcSize,
+                style = Stroke(width = stroke, cap = StrokeCap.Round)
+            )
+            drawArc(
+                brush = Brush.sweepGradient(listOf(RxPurple, RxBlue, RxCyan, RxPurple)),
+                startAngle = -90f,
+                sweepAngle = 360f * animated,
+                useCenter = false,
+                topLeft = Offset(inset, inset),
+                size = arcSize,
+                style = Stroke(width = stroke, cap = StrokeCap.Round)
+            )
+        }
+        Row(
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Box(Modifier.width(7.dp).height(16.dp).clip(RoundedCornerShape(4.dp)).background(RxBlue))
+            Box(Modifier.width(7.dp).height(30.dp).clip(RoundedCornerShape(4.dp)).background(RxCyan))
+            Box(Modifier.width(7.dp).height(22.dp).clip(RoundedCornerShape(4.dp)).background(RxPurple))
+        }
+    }
+}
+
+data class QuickAction(val label: String, val icon: ImageVector, val onClick: () -> Unit)
+
+@Composable
+fun QuickActionsRow(items: List<QuickAction>) {
+    val rx = LocalRx.current
+    Row(
+        Modifier.fillMaxWidth().glass(RoundedCornerShape(28.dp)).padding(vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        items.forEachIndexed { i, item ->
+            if (i > 0) {
+                Box(
+                    Modifier
+                        .width(1.dp)
+                        .height(38.dp)
+                        .background(rx.text.copy(alpha = 0.12f))
+                )
+            }
+            Column(
+                Modifier.weight(1f).pressScale(item.onClick),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(item.icon, contentDescription = item.label, tint = rx.text)
+                Text(item.label, fontSize = 12.sp, color = rx.text, maxLines = 1)
+            }
+        }
+    }
+}
+
+@Composable
+fun StatTile(
+    value: String,
+    label: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier
+) {
+    val rx = LocalRx.current
+    Row(
+        modifier.glass(RoundedCornerShape(24.dp)).padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier
+                .size(46.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(RxBlue.copy(alpha = 0.22f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = RxBlue)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(value, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = rx.text)
+            Text(label, fontSize = 13.sp, color = rx.muted, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+fun ActivityRow(
+    title: String,
+    subtitle: String,
+    trailing: String,
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
+    val rx = LocalRx.current
+    Row(
+        Modifier.fillMaxWidth().pressScale(onClick).padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier.size(46.dp).glass(CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = RxBlue)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, fontWeight = FontWeight.SemiBold, color = rx.text, maxLines = 1)
+            Text(subtitle, fontSize = 13.sp, color = rx.muted, maxLines = 1)
+        }
+        Text(trailing, fontSize = 13.sp, color = rx.muted)
+    }
 }
 
 data class GlassTab(val label: String, val icon: ImageVector)
@@ -396,41 +622,39 @@ fun GlassBottomBar(tabs: List<GlassTab>, selected: Int, onSelect: (Int) -> Unit)
         Row(
             Modifier
                 .fillMaxWidth()
-                .glass(RoundedCornerShape(28.dp), strong = true)
+                .glass(RoundedCornerShape(32.dp), strong = true)
                 .padding(6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             tabs.forEachIndexed { i, tab ->
                 val active = i == selected
                 val progress by animateFloatAsState(
                     targetValue = if (active) 1f else 0f,
-                    animationSpec = tween(250),
+                    animationSpec = tween(300),
                     label = "tabBg$i"
                 )
                 val tint by animateColorAsState(
-                    targetValue = if (active) rx.activeTint else rx.muted,
-                    animationSpec = tween(250),
+                    targetValue = if (active) Color.White else rx.text.copy(alpha = 0.85f),
+                    animationSpec = tween(300),
                     label = "tabTint$i"
                 )
-                Column(
+                Box(
                     Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(22.dp))
+                        .weight(1f + 0.7f * progress)
+                        .height(54.dp)
+                        .clip(RoundedCornerShape(28.dp))
                         .background(
-                            Brush.horizontalGradient(
+                            Brush.linearGradient(
                                 listOf(
-                                    RxBlue.copy(alpha = rx.activePill * progress),
-                                    RxPurple.copy(alpha = rx.activePill * progress)
+                                    RxBlue.copy(alpha = progress),
+                                    Color(0xFF1D4ED8).copy(alpha = progress)
                                 )
                             )
                         )
-                        .clickable { onSelect(i) }
-                        .padding(vertical = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .clickable { onSelect(i) },
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(tab.icon, contentDescription = tab.label, tint = tint)
-                    Text(tab.label, fontSize = 10.sp, color = tint, maxLines = 1)
                 }
             }
         }

@@ -175,10 +175,10 @@ fun AuthScreen(dark: Boolean, onToggleTheme: () -> Unit, onDone: () -> Unit) {
                     Modifier.size(66.dp).clip(RoundedCornerShape(22.dp)).background(rxBrush()),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        if (isSignUp) Icons.Default.Person else Icons.Default.Lock,
-                        contentDescription = null,
-                        tint = Color.White
+                    RxGlyphIcon(
+                        if (isSignUp) RxGlyph.Person else RxGlyph.Join,
+                        Color.White,
+                        iconSize = 30.dp
                     )
                 }
             }
@@ -319,11 +319,11 @@ fun roleName(role: String): String {
 fun RoomXApp(dark: Boolean, onToggleTheme: () -> Unit, onLogout: () -> Unit) {
     val rx = LocalRx.current
     val tabs = listOf(
-        GlassTab("Home", Icons.Default.Home),
-        GlassTab("Rooms", Icons.Default.Email),
-        GlassTab("Tournaments", Icons.Default.Star),
-        GlassTab("Alerts", Icons.Default.Notifications),
-        GlassTab("Profile", Icons.Default.Person)
+        RxTab("Home", RxGlyph.Home),
+        RxTab("Rooms", RxGlyph.Chat),
+        RxTab("Tournaments", RxGlyph.Trophy),
+        RxTab("Alerts", RxGlyph.Bell),
+        RxTab("Profile", RxGlyph.PersonCircle)
     )
     val scope = rememberCoroutineScope()
     var selected by remember { mutableIntStateOf(0) }
@@ -364,7 +364,7 @@ fun RoomXApp(dark: Boolean, onToggleTheme: () -> Unit, onLogout: () -> Unit) {
                 if (selected != 0) TopBar(dark, onToggleTheme)
             },
             bottomBar = {
-                GlassBottomBar(tabs = tabs, selected = selected, onSelect = { selected = it })
+                RxBottomBar(tabs = tabs, selected = selected, onSelect = { selected = it })
             }
         ) { padding ->
             Box(Modifier.padding(padding).fillMaxSize()) {
@@ -608,7 +608,7 @@ fun HomeScreen(
                     Modifier.size(52.dp).glass(CircleShape, strong = true),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Person, contentDescription = null, tint = rx.text)
+                    RxGlyphIcon(RxGlyph.Person, rx.text, iconSize = 26.dp)
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
@@ -621,8 +621,8 @@ fun HomeScreen(
                     )
                 }
                 ThemeToggle(dark, onToggleTheme)
-                Spacer(Modifier.width(8.dp))
-                GlassIconButton(Icons.Default.Notifications, onAlerts)
+                Spacer(Modifier.width(6.dp))
+                RxIconButton(RxGlyph.Bell, onAlerts)
             }
         }
 
@@ -650,12 +650,12 @@ fun HomeScreen(
         }
 
         Appear(180) {
-            QuickActionsRow(
+            RxQuickActionsRow(
                 listOf(
-                    QuickAction("Create", Icons.Default.Add, onCreateRoom),
-                    QuickAction("Join", Icons.Default.ArrowForward, onJoinRoom),
-                    QuickAction("Search", Icons.Default.Search, onSearch),
-                    QuickAction("Tournaments", Icons.Default.Star, onTournaments)
+                    RxQuickAction("Create", RxGlyph.Plus, onCreateRoom),
+                    RxQuickAction("Join", RxGlyph.Join, onJoinRoom),
+                    RxQuickAction("Search", RxGlyph.Search, onSearch),
+                    RxQuickAction("Tournaments", RxGlyph.Trophy, onTournaments)
                 )
             )
         }
@@ -663,20 +663,20 @@ fun HomeScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.weight(1f)) {
                 Appear(260) {
-                    StatTile(
+                    RxStatTile(
                         rooms.size.toString(),
                         "Total Rooms",
-                        Icons.Default.Email,
+                        RxGlyph.Chat,
                         Modifier.fillMaxWidth()
                     )
                 }
             }
             Box(Modifier.weight(1f)) {
                 Appear(320) {
-                    StatTile(
+                    RxStatTile(
                         totalMembers.toString(),
                         "Total Members",
-                        Icons.Default.AccountCircle,
+                        RxGlyph.Person,
                         Modifier.fillMaxWidth()
                     )
                 }
@@ -710,11 +710,11 @@ fun HomeScreen(
                         )
                     } else {
                         rooms.take(3).forEach { room ->
-                            ActivityRow(
+                            RxActivityRow(
                                 title = room.name,
                                 subtitle = "${room.code} · ${roleName(room.role)}",
                                 trailing = "${room.members}/${room.capacity}",
-                                icon = Icons.Default.Email,
+                                glyph = RxGlyph.Chat,
                                 onClick = { onOpen(room) }
                             )
                         }
@@ -775,7 +775,7 @@ fun RoomsScreen(
             value = query,
             onValueChange = { query = it },
             placeholder = { Text("Search rooms by name or code...") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            leadingIcon = { RxGlyphIcon(RxGlyph.Search, rx.muted, iconSize = 22.dp) },
             singleLine = true,
             shape = RoundedCornerShape(18.dp),
             colors = glassFieldColors(),

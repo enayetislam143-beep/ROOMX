@@ -34,6 +34,52 @@ data class MemberInfo(
     val role: String
 )
 
+data class TournamentInfo(
+    val id: String,
+    val code: String,
+    val name: String,
+    val game: String,
+    val format: String,
+    val participation: String,
+    val status: String,
+    val isPublic: Boolean,
+    val maxParticipants: Int,
+    val startAt: String,
+    val participants: Int,
+    val myRole: String
+)
+
+data class TournamentPerson(
+    val userId: String,
+    val username: String
+)
+
+data class TournamentDetail(
+    val id: String,
+    val code: String,
+    val name: String,
+    val game: String,
+    val description: String,
+    val format: String,
+    val participation: String,
+    val maxParticipants: Int,
+    val startAt: String,
+    val rules: String,
+    val prize: String,
+    val contact: String,
+    val isPublic: Boolean,
+    val status: String,
+    val myRole: String,
+    val organizer: String,
+    val participants: List<TournamentPerson>
+)
+
+data class CreatedTournament(
+    val id: String,
+    val code: String,
+    val name: String
+)
+
 object SupabaseApi {
     private const val BASE_URL = "https://auvathuvfzfeqnwwkoyb.supabase.co"
     private const val API_KEY = "sb_publishable_MrS0c9eYluNL9DHB_5AALg_x0_ayu7T"
@@ -357,6 +403,142 @@ object SupabaseApi {
         withContext(Dispatchers.IO) {
             val body = JSONObject().put("p_room_id", roomId)
             request("/rest/v1/rpc/delete_room", body, true)
+            Unit
+        }
+
+    private fun JSONObject.str(key: String): String {
+        return if (isNull(key)) "" else optString(key, "")
+    }
+
+    suspend fun createTournament(
+        name: String,
+        game: String,
+        description: String,
+        format: String,
+        participation: String,
+        maxParticipants: Int,
+        startAtIso: String?,
+        rules: String,
+        prize: String,
+        contact: String,
+        isPublic: Boolean
+    ): CreatedTournament =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("p_name", name)
+                .put("p_game", game)
+                .put("p_description", description)
+                .put("p_format", format)
+                .put("p_participation", participation)
+                .put("p_max", maxParticipants)
+                .put("p_start", startAtIso ?: JSONObject.NULL)
+                .put("p_rules", rules)
+                .put("p_prize", prize)
+                .put("p_contact", contact)
+                .put("p_public", isPublic)
+            val json = JSONObject(request("/rest/v1/rpc/create_tournament", body, true))
+            CreatedTournament(
+                id = json.getString("id"),
+                code = json.getString("code"),
+                name = json.getString("name")
+            )
+        }
+
+    suspend fun listTournaments(scope: String): List<TournamentInfo> =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("p_scope", scope)
+            val text = request("/rest/v1/rpc/list_tournaments", body, true)
+            val arr = JSONArray(if (text.isBlank()) "[]" else text)
+            val list = mutableListOf<TournamentInfo>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                list.add(
+                    TournamentInfo(
+                        id = o.getString("id"),
+                        code = o.getString("code"),
+                        name = o.getString("name"),
+                        game = o.optString("game", ""),
+                        format = o.optString("format", "single_elimination"),
+                        participation = o.optString("participation", "individual"),
+                        status = o.optString("status", "registration"),
+                        isPublic = o.optBoolean("is_public", true),
+                        maxParticipants = o.optInt("max_participants", 16),
+                        startAt = o.str("start_at"),
+                        participants = o.optInt("participants", 0),
+                        myRole = o.optString("my_role", "none")
+                    )
+                )
+            }
+            list
+        }
+
+    suspend fun getTournament(id: String): TournamentDetail =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("p_id", id)
+            val o = JSONObject(request("/rest/v1/rpc/get_tournament", body, true))
+            val people = mutableListOf<TournamentPerson>()
+            val arr = o.optJSONArray("participants") ?: JSONArray()
+            for (i in 0 until arr.length()) {
+                val p = arr.getJSONObject(i)
+                people.add(
+                    TournamentPerson(
+                        userId = p.optString("user_id", ""),
+                        username = p.optString("username", "user")
+                    )
+                )
+            }
+            TournamentDetail(
+                id = o.getString("id"),
+                code = o.getString("code"),
+                name = o.getString("name"),
+                game = o.optString("game", ""),
+                description = o.optString("description", ""),
+                format = o.optString("format", "single_elimination"),
+                participation = o.optString("participation", "individual"),
+                maxParticipants = o.optInt("max_participants", 16),
+                startAt = o.str("start_at"),
+                rules = o.optString("rules", ""),
+                prize = o.optString("prize", ""),
+                contact = o.optString("contact", ""),
+                isPublic = o.optBoolean("is_public", true),
+                status = o.optString("status", "registration"),
+                myRole = o.optString("my_role", "none"),
+                organizer = o.str("organizer").ifBlank { "user" },
+                participants = people
+            )
+        }
+
+    suspend fun registerTournament(code: String): CreatedTournament =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("p_code", code)
+            val json = JSONObject(request("/rest/v1/rpc/register_tournament", body, true))
+            CreatedTournament(
+                id = json.getString("id"),
+                code = json.getString("code"),
+                name = json.getString("name")
+            )
+        }
+
+    suspend fun unregisterTournament(id: String) =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("p_id", id)
+            request("/rest/v1/rpc/unregister_tournament", body, true)
+            Unit
+        }
+
+    suspend fun setTournamentStatus(id: String, status: String) =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("p_id", id)
+                .put("p_status", status)
+            request("/rest/v1/rpc/set_tournament_status", body, true)
+            Unit
+        }
+
+    suspend fun deleteTournament(id: String) =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("p_id", id)
+            request("/rest/v1/rpc/delete_tournament", body, true)
             Unit
         }
 }

@@ -110,6 +110,15 @@ private fun shareTournament(ctx: Context, name: String, code: String) {
     }
 }
 
+private fun roundName(round: Int, total: Int): String {
+    return when (total - round) {
+        0 -> "Final"
+        1 -> "Semi-finals"
+        2 -> "Quarter-finals"
+        else -> "Round $round"
+    }
+}
+
 @Composable
 fun ChoiceChips(
     options: List<Pair<String, String>>,
@@ -478,7 +487,7 @@ fun CreateTournamentScreen(onBack: () -> Unit, onCreated: (CreatedTournament) ->
         Text("Format", fontWeight = FontWeight.SemiBold)
         ChoiceChips(formatOptions, format) { format = it }
         Text(
-            "Brackets and matches for every format are coming in the next update.",
+            "Right now only Single Elimination brackets can be started. The other formats are coming soon.",
             color = rx.muted,
             fontSize = 12.sp
         )
@@ -613,6 +622,142 @@ fun CreateTournamentScreen(onBack: () -> Unit, onCreated: (CreatedTournament) ->
 }
 
 @Composable
+fun PlayerLine(name: String, score: Int?, isWinner: Boolean) {
+    val rx = LocalRx.current
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            name,
+            color = if (isWinner) RxBlue else rx.text,
+            fontWeight = if (isWinner) FontWeight.Bold else FontWeight.Normal,
+            fontSize = 16.sp,
+            maxLines = 1,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            score?.toString() ?: "-",
+            color = if (isWinner) RxBlue else rx.muted,
+            fontWeight = FontWeight.Bold,
+            fontSize = 18.sp
+        )
+    }
+}
+
+@Composable
+fun MatchCard(m: MatchInfo, canEnter: Boolean, onEnter: () -> Unit) {
+    val bye = m.status == "bye"
+    val nameA = if (m.nameA.isNotBlank()) m.nameA else if (bye && m.playerA.isBlank()) "BYE" else "TBD"
+    val nameB = if (m.nameB.isNotBlank()) m.nameB else if (bye && m.playerB.isBlank()) "BYE" else "TBD"
+    val chipText = when (m.status) {
+        "ready" -> "Ready"
+        "completed" -> "Completed"
+        "bye" -> "Bye"
+        else -> "Waiting"
+    }
+    val chipColor = when (m.status) {
+        "ready" -> RxBlue
+        "completed" -> Color(0xFF22C55E)
+        "bye" -> RxPurple
+        else -> Color(0xFF9AA0B4)
+    }
+    GlassPanel(Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Chip(chipText, chipColor)
+            }
+            PlayerLine(nameA, m.scoreA, m.winner.isNotBlank() && m.winner == m.playerA)
+            PlayerLine(nameB, m.scoreB, m.winner.isNotBlank() && m.winner == m.playerB)
+            if (canEnter && m.status == "ready") {
+                GradientButton(
+                    text = "Enter result",
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onEnter
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ResultDialog(match: MatchInfo, onDismiss: () -> Unit, onSaved: () -> Unit) {
+    var a by remember { mutableStateOf("") }
+    var b by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    AlertDialog(
+        onDismissRequest = { if (!loading) onDismiss() },
+        title = { Text("Enter result") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = a,
+                    onValueChange = { a = it.filter { c -> c.isDigit() }.take(3) },
+                    label = { Text("${match.nameA} score") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    colors = glassFieldColors(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = b,
+                    onValueChange = { b = it.filter { c -> c.isDigit() }.take(3) },
+                    label = { Text("${match.nameB} score") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    colors = glassFieldColors(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    "A knockout match cannot end in a draw. The winner moves to the next round.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (error != null) {
+                    Text(error ?: "", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = !loading,
+                onClick = {
+                    val sa = a.toIntOrNull()
+                    val sb = b.toIntOrNull()
+                    if (sa == null || sb == null) {
+                        error = "Enter both scores."
+                    } else if (sa == sb) {
+                        error = "A knockout match cannot end in a draw."
+                    } else {
+                        scope.launch {
+                            loading = true
+                            error = null
+                            try {
+                                SupabaseApi.setMatchResult(match.id, sa, sb)
+                                onSaved()
+                            } catch (e: Exception) {
+                                error = e.message ?: "Could not save the result."
+                                loading = false
+                            }
+                        }
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = RxBlue)
+            ) {
+                Text(if (loading) "Saving..." else "Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !loading) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
 fun TournamentDetailScreen(id: String, onBack: () -> Unit) {
     BackHandler(onBack = onBack)
     val rx = LocalRx.current
@@ -620,15 +765,23 @@ fun TournamentDetailScreen(id: String, onBack: () -> Unit) {
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     var detail by remember { mutableStateOf<TournamentDetail?>(null) }
+    var matches by remember { mutableStateOf<List<MatchInfo>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var reload by remember { mutableIntStateOf(0) }
     var busy by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf<String?>(null) }
+    var resultFor by remember { mutableStateOf<MatchInfo?>(null) }
 
     LaunchedEffect(id, reload) {
         try {
-            detail = SupabaseApi.getTournament(id)
+            val d = SupabaseApi.getTournament(id)
+            detail = d
+            matches = if (d.status == "in_progress" || d.status == "completed") {
+                SupabaseApi.getBracket(id)
+            } else {
+                emptyList()
+            }
             error = null
         } catch (e: Exception) {
             error = e.message ?: "Could not load the tournament."
@@ -715,6 +868,34 @@ fun TournamentDetailScreen(id: String, onBack: () -> Unit) {
                 }
             }
 
+            if (d.status == "completed" && matches.isNotEmpty()) {
+                val finalMatch = matches.maxByOrNull { it.round }
+                val champion = if (finalMatch == null || finalMatch.winner.isBlank()) {
+                    ""
+                } else if (finalMatch.winner == finalMatch.playerA) {
+                    finalMatch.nameA
+                } else {
+                    finalMatch.nameB
+                }
+                if (champion.isNotBlank()) {
+                    GlassPanel(Modifier.fillMaxWidth(), strong = true) {
+                        Column(
+                            Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text("🏆 Champion", fontSize = 16.sp, color = rx.muted)
+                            Text(
+                                champion,
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = RxBlue
+                            )
+                        }
+                    }
+                }
+            }
+
             if (d.participation == "team") {
                 Text(
                     "Team management is coming soon. For now each person registers on their own.",
@@ -756,6 +937,35 @@ fun TournamentDetailScreen(id: String, onBack: () -> Unit) {
                 }
             }
 
+            if (matches.isNotEmpty()) {
+                val rounds = matches.groupBy { it.round }.toSortedMap()
+                val totalRounds = rounds.keys.maxOrNull() ?: 1
+                val canEnter = isOrganizer && d.status == "in_progress"
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Bracket",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = { reload++ }) { Text("Refresh") }
+                }
+                rounds.forEach { (round, list) ->
+                    Text(
+                        roundName(round, totalRounds),
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = RxBlue
+                    )
+                    list.forEach { m ->
+                        MatchCard(m, canEnter) { resultFor = m }
+                    }
+                }
+            }
+
             GlassPanel(Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
@@ -781,14 +991,6 @@ fun TournamentDetailScreen(id: String, onBack: () -> Unit) {
                         }
                     }
                 }
-            }
-
-            if (d.status == "in_progress") {
-                Text(
-                    "The tournament has started. Brackets, match schedule and results are coming in the next update.",
-                    color = rx.muted,
-                    fontSize = 13.sp
-                )
             }
 
             if (d.status == "registration" && !isOrganizer && !isParticipant) {
@@ -845,6 +1047,17 @@ fun TournamentDetailScreen(id: String, onBack: () -> Unit) {
         }
     }
 
+    resultFor?.let { m ->
+        ResultDialog(
+            match = m,
+            onDismiss = { resultFor = null },
+            onSaved = {
+                resultFor = null
+                reload++
+            }
+        )
+    }
+
     confirm?.let { action ->
         val title = when (action) {
             "start" -> "Start tournament?"
@@ -853,7 +1066,7 @@ fun TournamentDetailScreen(id: String, onBack: () -> Unit) {
             else -> "Delete tournament?"
         }
         val body = when (action) {
-            "start" -> "Registration will close. You need at least 2 participants."
+            "start" -> "Registration will close and the bracket will be created with random seeding. You need at least 2 participants. Only Single Elimination can be started right now."
             "complete" -> "The tournament will be marked as completed."
             "cancel" -> "The tournament will be cancelled for everyone."
             else -> "This permanently deletes the tournament for everyone. This cannot be undone."

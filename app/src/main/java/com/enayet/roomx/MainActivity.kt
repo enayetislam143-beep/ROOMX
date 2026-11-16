@@ -397,7 +397,7 @@ fun RoomXApp(dark: Boolean, onToggleTheme: () -> Unit, onLogout: () -> Unit) {
                             onOpen = { openRoom = it },
                             onLeave = { leaving = it }
                         )
-                        2 -> TournamentsScreen()
+                        2 -> TournamentsTab()
                         3 -> NotificationsScreen()
                         else -> ProfileScreen(dark, onToggleTheme, onLogout)
                     }

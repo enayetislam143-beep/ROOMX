@@ -80,6 +80,20 @@ data class CreatedTournament(
     val name: String
 )
 
+data class MatchInfo(
+    val id: String,
+    val round: Int,
+    val slot: Int,
+    val playerA: String,
+    val playerB: String,
+    val nameA: String,
+    val nameB: String,
+    val scoreA: Int?,
+    val scoreB: Int?,
+    val winner: String,
+    val status: String
+)
+
 object SupabaseApi {
     private const val BASE_URL = "https://auvathuvfzfeqnwwkoyb.supabase.co"
     private const val API_KEY = "sb_publishable_MrS0c9eYluNL9DHB_5AALg_x0_ayu7T"
@@ -539,6 +553,43 @@ object SupabaseApi {
         withContext(Dispatchers.IO) {
             val body = JSONObject().put("p_id", id)
             request("/rest/v1/rpc/delete_tournament", body, true)
+            Unit
+        }
+
+    suspend fun getBracket(tournamentId: String): List<MatchInfo> =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("p_tid", tournamentId)
+            val text = request("/rest/v1/rpc/get_bracket", body, true)
+            val arr = JSONArray(if (text.isBlank()) "[]" else text)
+            val list = mutableListOf<MatchInfo>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                list.add(
+                    MatchInfo(
+                        id = o.getString("id"),
+                        round = o.optInt("round", 1),
+                        slot = o.optInt("slot", 0),
+                        playerA = o.str("player_a"),
+                        playerB = o.str("player_b"),
+                        nameA = o.str("name_a"),
+                        nameB = o.str("name_b"),
+                        scoreA = if (o.isNull("score_a")) null else o.optInt("score_a"),
+                        scoreB = if (o.isNull("score_b")) null else o.optInt("score_b"),
+                        winner = o.str("winner"),
+                        status = o.optString("status", "pending")
+                    )
+                )
+            }
+            list
+        }
+
+    suspend fun setMatchResult(matchId: String, scoreA: Int, scoreB: Int) =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("p_match_id", matchId)
+                .put("p_score_a", scoreA)
+                .put("p_score_b", scoreB)
+            request("/rest/v1/rpc/set_match_result", body, true)
             Unit
         }
 }

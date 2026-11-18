@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -647,22 +648,40 @@ fun PlayerLine(name: String, score: Int?, isWinner: Boolean) {
 }
 
 @Composable
-fun MatchCard(m: MatchInfo, canEnter: Boolean, onEnter: () -> Unit) {
+fun MatchCard(
+    m: MatchInfo,
+    isOrganizer: Boolean,
+    running: Boolean,
+    onOrganizerEnter: () -> Unit,
+    onSubmit: () -> Unit,
+    onConfirm: () -> Unit,
+    onDispute: () -> Unit
+) {
+    val rx = LocalRx.current
+    val me = SupabaseApi.userId ?: ""
     val bye = m.status == "bye"
     val nameA = if (m.nameA.isNotBlank()) m.nameA else if (bye && m.playerA.isBlank()) "BYE" else "TBD"
     val nameB = if (m.nameB.isNotBlank()) m.nameB else if (bye && m.playerB.isBlank()) "BYE" else "TBD"
-    val chipText = when (m.status) {
-        "ready" -> "Ready"
-        "completed" -> "Completed"
-        "bye" -> "Bye"
+    val isPlayer = me.isNotBlank() && (me == m.playerA || me == m.playerB)
+    val iSubmitted = m.submittedBy.isNotBlank() && m.submittedBy == me
+
+    val chipText = when {
+        m.status == "ready" && m.resultStatus == "awaiting" -> "Awaiting confirmation"
+        m.status == "ready" && m.resultStatus == "disputed" -> "Disputed"
+        m.status == "ready" -> "Ready"
+        m.status == "completed" -> "Completed"
+        m.status == "bye" -> "Bye"
         else -> "Waiting"
     }
-    val chipColor = when (m.status) {
-        "ready" -> RxBlue
-        "completed" -> Color(0xFF22C55E)
-        "bye" -> RxPurple
+    val chipColor = when {
+        m.status == "ready" && m.resultStatus == "awaiting" -> Color(0xFFF59E0B)
+        m.status == "ready" && m.resultStatus == "disputed" -> Color(0xFFEF4444)
+        m.status == "ready" -> RxBlue
+        m.status == "completed" -> Color(0xFF22C55E)
+        m.status == "bye" -> RxPurple
         else -> Color(0xFF9AA0B4)
     }
+
     GlassPanel(Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -670,19 +689,56 @@ fun MatchCard(m: MatchInfo, canEnter: Boolean, onEnter: () -> Unit) {
             }
             PlayerLine(nameA, m.scoreA, m.winner.isNotBlank() && m.winner == m.playerA)
             PlayerLine(nameB, m.scoreB, m.winner.isNotBlank() && m.winner == m.playerB)
-            if (canEnter && m.status == "ready") {
-                GradientButton(
-                    text = "Enter result",
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = onEnter
-                )
+
+            if (running && m.status == "ready") {
+                if (m.resultStatus == "awaiting") {
+                    Text(
+                        "${m.submitterName} reported ${m.pendingA ?: 0} - ${m.pendingB ?: 0}",
+                        color = rx.muted,
+                        fontSize = 13.sp
+                    )
+                    if (isPlayer && !iSubmitted) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            GradientButton("Confirm", Modifier.weight(1f), onClick = onConfirm)
+                            GlassButton("Dispute", Modifier.weight(1f), onClick = onDispute)
+                        }
+                    } else if (isPlayer && iSubmitted) {
+                        Text(
+                            "Waiting for your opponent to confirm.",
+                            color = rx.muted,
+                            fontSize = 13.sp
+                        )
+                    }
+                } else if (m.resultStatus == "disputed") {
+                    Text(
+                        "This result is disputed. The organizer will decide.",
+                        color = rx.muted,
+                        fontSize = 13.sp
+                    )
+                } else if (isPlayer) {
+                    GradientButton("Submit result", Modifier.fillMaxWidth(), onClick = onSubmit)
+                }
+                if (isOrganizer) {
+                    GlassButton(
+                        "Enter result (organizer)",
+                        Modifier.fillMaxWidth(),
+                        onClick = onOrganizerEnter
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-fun ResultDialog(match: MatchInfo, onDismiss: () -> Unit, onSaved: () -> Unit) {
+fun ResultDialog(
+    match: MatchInfo,
+    title: String,
+    note: String,
+    onDismiss: () -> Unit,
+    onSaved: () -> Unit,
+    save: suspend (Int, Int) -> Unit
+) {
     var a by remember { mutableStateOf("") }
     var b by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -691,7 +747,7 @@ fun ResultDialog(match: MatchInfo, onDismiss: () -> Unit, onSaved: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = { if (!loading) onDismiss() },
-        title = { Text("Enter result") },
+        title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
@@ -713,7 +769,7 @@ fun ResultDialog(match: MatchInfo, onDismiss: () -> Unit, onSaved: () -> Unit) {
                     modifier = Modifier.fillMaxWidth()
                 )
                 Text(
-                    "A knockout match cannot end in a draw. The winner moves to the next round.",
+                    note,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -737,7 +793,7 @@ fun ResultDialog(match: MatchInfo, onDismiss: () -> Unit, onSaved: () -> Unit) {
                             loading = true
                             error = null
                             try {
-                                SupabaseApi.setMatchResult(match.id, sa, sb)
+                                save(sa, sb)
                                 onSaved()
                             } catch (e: Exception) {
                                 error = e.message ?: "Could not save the result."
@@ -771,7 +827,9 @@ fun TournamentDetailScreen(id: String, onBack: () -> Unit) {
     var reload by remember { mutableIntStateOf(0) }
     var busy by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf<String?>(null) }
-    var resultFor by remember { mutableStateOf<MatchInfo?>(null) }
+    var orgResultFor by remember { mutableStateOf<MatchInfo?>(null) }
+    var playerResultFor by remember { mutableStateOf<MatchInfo?>(null) }
+    var disputeFor by remember { mutableStateOf<MatchInfo?>(null) }
 
     LaunchedEffect(id, reload) {
         try {
@@ -789,6 +847,15 @@ fun TournamentDetailScreen(id: String, onBack: () -> Unit) {
         loading = false
     }
 
+    LaunchedEffect(detail?.status) {
+        if (detail?.status == "in_progress") {
+            while (true) {
+                delay(10000)
+                reload++
+            }
+        }
+    }
+
     val act: (suspend () -> Unit) -> Unit = { block ->
         scope.launch {
             busy = true
@@ -798,6 +865,7 @@ fun TournamentDetailScreen(id: String, onBack: () -> Unit) {
                 reload++
             } catch (e: Exception) {
                 error = e.message ?: "Something went wrong."
+                reload++
             }
             busy = false
         }
@@ -940,7 +1008,7 @@ fun TournamentDetailScreen(id: String, onBack: () -> Unit) {
             if (matches.isNotEmpty()) {
                 val rounds = matches.groupBy { it.round }.toSortedMap()
                 val totalRounds = rounds.keys.maxOrNull() ?: 1
-                val canEnter = isOrganizer && d.status == "in_progress"
+                val running = d.status == "in_progress"
                 Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -961,7 +1029,15 @@ fun TournamentDetailScreen(id: String, onBack: () -> Unit) {
                         color = RxBlue
                     )
                     list.forEach { m ->
-                        MatchCard(m, canEnter) { resultFor = m }
+                        MatchCard(
+                            m = m,
+                            isOrganizer = isOrganizer,
+                            running = running,
+                            onOrganizerEnter = { orgResultFor = m },
+                            onSubmit = { playerResultFor = m },
+                            onConfirm = { act { SupabaseApi.confirmResult(m.id) } },
+                            onDispute = { disputeFor = m }
+                        )
                     }
                 }
             }
@@ -1047,13 +1123,47 @@ fun TournamentDetailScreen(id: String, onBack: () -> Unit) {
         }
     }
 
-    resultFor?.let { m ->
+    orgResultFor?.let { m ->
         ResultDialog(
             match = m,
-            onDismiss = { resultFor = null },
+            title = "Enter result (organizer)",
+            note = "This sets the final result right away. A knockout match cannot end in a draw.",
+            onDismiss = { orgResultFor = null },
             onSaved = {
-                resultFor = null
+                orgResultFor = null
                 reload++
+            },
+            save = { sa, sb -> SupabaseApi.setMatchResult(m.id, sa, sb) }
+        )
+    }
+
+    playerResultFor?.let { m ->
+        ResultDialog(
+            match = m,
+            title = "Submit result",
+            note = "Your opponent must confirm this result before it becomes final. A knockout match cannot end in a draw.",
+            onDismiss = { playerResultFor = null },
+            onSaved = {
+                playerResultFor = null
+                reload++
+            },
+            save = { sa, sb -> SupabaseApi.submitResult(m.id, sa, sb) }
+        )
+    }
+
+    disputeFor?.let { m ->
+        AlertDialog(
+            onDismissRequest = { disputeFor = null },
+            title = { Text("Dispute this result?") },
+            text = { Text("The match will be held until the organizer decides the final result.") },
+            confirmButton = {
+                Button(onClick = {
+                    disputeFor = null
+                    act { SupabaseApi.disputeResult(m.id) }
+                }) { Text("Dispute") }
+            },
+            dismissButton = {
+                TextButton(onClick = { disputeFor = null }) { Text("Cancel") }
             }
         )
     }

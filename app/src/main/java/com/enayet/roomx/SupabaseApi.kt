@@ -91,7 +91,12 @@ data class MatchInfo(
     val scoreA: Int?,
     val scoreB: Int?,
     val winner: String,
-    val status: String
+    val status: String,
+    val resultStatus: String = "none",
+    val pendingA: Int? = null,
+    val pendingB: Int? = null,
+    val submittedBy: String = "",
+    val submitterName: String = ""
 )
 
 object SupabaseApi {
@@ -576,7 +581,12 @@ object SupabaseApi {
                         scoreA = if (o.isNull("score_a")) null else o.optInt("score_a"),
                         scoreB = if (o.isNull("score_b")) null else o.optInt("score_b"),
                         winner = o.str("winner"),
-                        status = o.optString("status", "pending")
+                        status = o.optString("status", "pending"),
+                        resultStatus = o.optString("result_status", "none"),
+                        pendingA = if (o.isNull("pending_a")) null else o.optInt("pending_a"),
+                        pendingB = if (o.isNull("pending_b")) null else o.optInt("pending_b"),
+                        submittedBy = o.str("submitted_by"),
+                        submitterName = o.str("submitter_name")
                     )
                 )
             }
@@ -590,6 +600,30 @@ object SupabaseApi {
                 .put("p_score_a", scoreA)
                 .put("p_score_b", scoreB)
             request("/rest/v1/rpc/set_match_result", body, true)
+            Unit
+        }
+
+    suspend fun submitResult(matchId: String, scoreA: Int, scoreB: Int) =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("p_match_id", matchId)
+                .put("p_score_a", scoreA)
+                .put("p_score_b", scoreB)
+            request("/rest/v1/rpc/submit_result", body, true)
+            Unit
+        }
+
+    suspend fun confirmResult(matchId: String) =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("p_match_id", matchId)
+            request("/rest/v1/rpc/confirm_result", body, true)
+            Unit
+        }
+
+    suspend fun disputeResult(matchId: String) =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("p_match_id", matchId)
+            request("/rest/v1/rpc/dispute_result", body, true)
             Unit
         }
 }
